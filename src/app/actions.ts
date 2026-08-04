@@ -15,14 +15,23 @@ export async function login(formData: FormData) {
     password: formData.get("password") as string,
   }
 
-  const { error } = await supabase.auth.signInWithPassword(data)
+  const { error, data: authData } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
     return { error: error.message }
   }
 
+  // Cek role user untuk menentukan halaman redirect
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", authData.user.id)
+    .single()
+
+  const role = profile?.role || "kasir"
+
   revalidatePath("/", "layout")
-  redirect("/")
+  redirect(role === "admin" ? "/admin" : "/")
 }
 
 export async function logout() {
