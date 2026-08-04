@@ -1,0 +1,16 @@
+{
+  "name": "POS Steam Cuci",
+  "short_name": "POS Steam",
+  "description": "Aplikasi Point of Sale Steam Cuci Kendaraan",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
