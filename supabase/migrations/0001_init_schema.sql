@@ -28,45 +28,35 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
+
 -- ---------------------------------------------------------
 -- 2. TABEL JENIS KENDARAAN (master data, admin bisa CRUD)
 -- ---------------------------------------------------------
+-- Split jatah karyawan/pemilik NOMINAL TETAP per kategori kendaraan
+-- (bukan persentase global) — berdasarkan data rekap aktual.
 create table public.jenis_kendaraan (
   id uuid primary key default gen_random_uuid(),
   kategori text not null,        -- "Motor" / "Mobil"
   ukuran text not null,          -- "Kecil" / "Sedang" / "Besar"
   tarif_default numeric(10,2) not null default 0,
+  jatah_karyawan numeric(10,2) not null default 0,
+  jatah_pemilik numeric(10,2) not null default 0,
   aktif boolean not null default true,
   created_at timestamptz not null default now(),
-  unique (kategori, ukuran)
+  unique (kategori, ukuran),
+  check (jatah_karyawan + jatah_pemilik = tarif_default)
 );
 
--- Seed data awal sesuai catatan bos (harga masih 0, isi manual nanti)
-insert into public.jenis_kendaraan (kategori, ukuran, tarif_default) values
-  ('Motor', 'Kecil', 0),
-  ('Motor', 'Besar', 0),
-  ('Mobil', 'Kecil', 0),
-  ('Mobil', 'Sedang', 0),
-  ('Mobil', 'Besar', 0);
+-- Seed data awal berdasarkan data rekap aktual (Juli)
+insert into public.jenis_kendaraan (kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik) values
+  ('Motor', 'Kecil', 15000, 7000, 8000),
+  ('Motor', 'Besar', 20000, 7000, 13000),
+  ('Mobil', 'Kecil', 30000, 13000, 17000),
+  ('Mobil', 'Sedang', 35000, 13000, 22000),
+  ('Mobil', 'Besar', 40000, 15000, 25000);
 
 -- ---------------------------------------------------------
--- 3. TABEL KONFIGURASI SPLIT TARIF (admin bisa atur)
--- ---------------------------------------------------------
--- Skema split masih perlu dikonfirmasi ke owner (persen atau nominal tetap).
--- Default: persentase. Kalau ternyata nominal tetap, ganti pendekatan kolom.
-create table public.konfigurasi_split (
-  id uuid primary key default gen_random_uuid(),
-  persen_karyawan numeric(5,2) not null default 30.00,
-  persen_pemilik numeric(5,2) not null default 70.00,
-  berlaku_sejak timestamptz not null default now(),
-  check (persen_karyawan + persen_pemilik = 100)
-);
-
-insert into public.konfigurasi_split (persen_karyawan, persen_pemilik)
-values (30.00, 70.00);
-
--- ---------------------------------------------------------
--- 4. TABEL TRANSAKSI
+-- 3. TABEL TRANSAKSI
 -- ---------------------------------------------------------
 create table public.transaksi (
   id uuid primary key default gen_random_uuid(),
@@ -90,7 +80,6 @@ create index idx_transaksi_kasir on public.transaksi (kasir_id);
 -- ---------------------------------------------------------
 alter table public.profiles enable row level security;
 alter table public.jenis_kendaraan enable row level security;
-alter table public.konfigurasi_split enable row level security;
 alter table public.transaksi enable row level security;
 
 -- Helper function: cek role user yang lagi login
@@ -125,15 +114,6 @@ create policy "jenis_kendaraan_admin_update" on public.jenis_kendaraan
 
 create policy "jenis_kendaraan_admin_delete" on public.jenis_kendaraan
   for delete using (public.current_user_role() = 'admin');
-
--- KONFIGURASI_SPLIT: semua bisa baca (buat hitung split pas input transaksi),
--- cuma admin yang bisa ubah
-create policy "konfigurasi_split_select_all" on public.konfigurasi_split
-  for select using (auth.uid() is not null);
-
-create policy "konfigurasi_split_admin_manage" on public.konfigurasi_split
-  for all using (public.current_user_role() = 'admin')
-  with check (public.current_user_role() = 'admin');
 
 -- TRANSAKSI: semua user login (kasir & admin) bisa liat SEMUA transaksi
 -- (sesuai request: kasir juga bisa rekap semua history, bukan cuma miliknya)
@@ -175,17 +155,16 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- =========================================================
--- CATATAN PENTING (jangan lupa follow up ke owner):
--- 1. Skema split tarif di atas pakai PERSENTASE (30/70 default).
---    Kalau ternyata owner maunya NOMINAL TETAP per transaksi, ganti kolom
---    konfigurasi_split jadi nominal_karyawan/nominal_pemilik dan sesuaikan
---    cara hitung tarif_jatah_* di aplikasi.
--- 2. tarif_default di jenis_kendaraan masih 0 - isi manual lewat Supabase
---    Table Editor atau lewat UI admin setelah app jadi.
--- 3. plat_nomor sengaja dibuat NULLABLE - konfirmasi ke owner apakah wajib.
--- 4. Role pertama kali admin harus di-set manual lewat SQL Editor:
+-- CATATAN PENTING:
+-- 1. Tarif & split jatah karyawan/pemilik SUDAH final berdasarkan data
+--    rekap aktual (bukan asumsi lagi). Split berupa NOMINAL TETAP per
+--    kategori kendaraan, disimpan langsung di kolom jatah_karyawan/
+--    jatah_pemilik pada tabel jenis_kendaraan (bukan tabel/persentase
+--    terpisah).
+-- 2. plat_nomor sengaja dibuat NULLABLE - konfirmasi ke owner apakah wajib.
+-- 3. Role pertama kali admin harus di-set manual lewat SQL Editor:
 --    update public.profiles set role = 'admin' where username = 'USERNAME_ADMIN';
--- 5. AUTH: aplikasi wajib convert username jadi email format
+-- 4. AUTH: aplikasi wajib convert username jadi email format
 --    {username}@carwash.internal sebelum panggil Supabase Auth
 --    (signInWithPassword / admin.createUser). Domain ini cuma format,
 --    tidak perlu bisa menerima email asli. Lihat AGENTS.md bagian
