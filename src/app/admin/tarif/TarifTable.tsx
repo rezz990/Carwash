@@ -10,6 +10,8 @@ type JenisKendaraan = {
   kategori: string
   ukuran: string
   tarif_default: number
+  jatah_karyawan: number
+  jatah_pemilik: number
   aktif: boolean
 }
 
@@ -49,10 +51,11 @@ function formatRupiah(value: number) {
   }).format(value)
 }
 
-// Inline editable tarif cell
+// Inline editable tarif + jatah karyawan cell (jatah pemilik dihitung otomatis)
 function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: string, type: "success" | "error") => void }) {
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(item.tarif_default.toString())
+  const [tarif, setTarif] = useState(item.tarif_default.toString())
+  const [jatahKaryawan, setJatahKaryawan] = useState(item.jatah_karyawan.toString())
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -66,30 +69,46 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
   // Sync state kalau props berubah dari server (setelah revalidation)
   useEffect(() => {
     if (!editing) {
-      setValue(item.tarif_default.toString())
+      setTarif(item.tarif_default.toString())
+      setJatahKaryawan(item.jatah_karyawan.toString())
     }
-  }, [item.tarif_default, editing])
+  }, [item.tarif_default, item.jatah_karyawan, editing])
+
+  const tarifNum = parseFloat(tarif) || 0
+  const jatahKaryawanNum = parseFloat(jatahKaryawan) || 0
+  const jatahPemilikPreview = tarifNum - jatahKaryawanNum
 
   const handleSave = () => {
-    const numVal = parseFloat(value)
-    if (isNaN(numVal) || numVal < 0) {
+    const tarifVal = parseFloat(tarif)
+    const jatahVal = parseFloat(jatahKaryawan)
+
+    if (isNaN(tarifVal) || tarifVal < 0) {
       onResult("Tarif harus berupa angka positif", "error")
-      setValue(item.tarif_default.toString())
-      setEditing(false)
+      resetValues()
+      return
+    }
+    if (isNaN(jatahVal) || jatahVal < 0) {
+      onResult("Jatah karyawan harus berupa angka positif", "error")
+      resetValues()
+      return
+    }
+    if (jatahVal > tarifVal) {
+      onResult("Jatah karyawan tidak boleh melebihi tarif total", "error")
+      resetValues()
       return
     }
 
-    // Kalau nilai tidak berubah, skip update
-    if (numVal === item.tarif_default) {
+    // Kalau tidak ada perubahan, skip update
+    if (tarifVal === item.tarif_default && jatahVal === item.jatah_karyawan) {
       setEditing(false)
       return
     }
 
     startTransition(async () => {
-      const result = await updateTarifDefault(item.id, numVal)
+      const result = await updateTarifDefault(item.id, tarifVal, jatahVal)
       if (result.error) {
         onResult(result.error, "error")
-        setValue(item.tarif_default.toString())
+        resetValues()
       } else {
         onResult(`Tarif ${item.kategori} ${item.ukuran} berhasil diperbarui`, "success")
       }
@@ -97,35 +116,58 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
     })
   }
 
+  const resetValues = () => {
+    setTarif(item.tarif_default.toString())
+    setJatahKaryawan(item.jatah_karyawan.toString())
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSave()
     if (e.key === "Escape") {
-      setValue(item.tarif_default.toString())
+      resetValues()
       setEditing(false)
     }
   }
 
   if (editing) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-medium">Rp</span>
-          <Input
-            ref={inputRef}
-            type="number"
-            min="0"
-            step="1000"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={handleSave}
-            disabled={isPending}
-            className="w-40 h-10 pl-9 text-sm bg-white border-indigo-300 focus-visible:ring-indigo-500"
-          />
+      <div className="flex flex-col gap-2 py-1">
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Tarif</span>
+            <Input
+              ref={inputRef}
+              type="number"
+              min="0"
+              step="1000"
+              value={tarif}
+              onChange={(e) => setTarif(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isPending}
+              className="w-36 h-9 pl-14 text-sm bg-white border-indigo-300 focus-visible:ring-indigo-500"
+            />
+          </div>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Jatah Kry</span>
+            <Input
+              type="number"
+              min="0"
+              step="1000"
+              value={jatahKaryawan}
+              onChange={(e) => setJatahKaryawan(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={handleSave}
+              disabled={isPending}
+              className="w-40 h-9 pl-20 text-sm bg-white border-indigo-300 focus-visible:ring-indigo-500"
+            />
+          </div>
+          {isPending && (
+            <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+          )}
         </div>
-        {isPending && (
-          <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-        )}
+        <span className="text-xs text-slate-400 pl-1">
+          Jatah pemilik: <span className="font-medium text-slate-600">{formatRupiah(Math.max(jatahPemilikPreview, 0))}</span> (otomatis)
+        </span>
       </div>
     )
   }
@@ -133,13 +175,18 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
   return (
     <button
       onClick={() => setEditing(true)}
-      className="group flex items-center gap-2 px-3 py-2 -mx-3 -my-2 rounded-lg hover:bg-indigo-50/80 transition-colors cursor-pointer"
-      title="Klik untuk edit tarif"
+      className="group flex flex-col items-start gap-0.5 px-3 py-2 -mx-3 -my-2 rounded-lg hover:bg-indigo-50/80 transition-colors cursor-pointer text-left"
+      title="Klik untuk edit tarif & jatah karyawan"
     >
-      <span className="font-semibold text-slate-900 tabular-nums">
-        {formatRupiah(item.tarif_default)}
+      <div className="flex items-center gap-2">
+        <span className="font-semibold text-slate-900 tabular-nums">
+          {formatRupiah(item.tarif_default)}
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-indigo-500 transition-colors"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+      </div>
+      <span className="text-xs text-slate-400 tabular-nums">
+        Kry {formatRupiah(item.jatah_karyawan)} · Pemilik {formatRupiah(item.jatah_pemilik)}
       </span>
-      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-indigo-500 transition-colors"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
     </button>
   )
 }
