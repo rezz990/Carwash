@@ -42,12 +42,22 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user) {
-    // Fetch user profile to get the role
+    // Fetch user profile untuk role & status aktif
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, aktif')
       .eq('id', user.id)
       .single()
+
+    // User yang dinonaktifkan admin harus langsung ke-logout & tidak bisa
+    // akses halaman manapun, walau session/cookie-nya masih valid
+    if (profile && profile.aktif === false) {
+      await supabase.auth.signOut()
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'akun_nonaktif')
+      return NextResponse.redirect(url)
+    }
 
     const role = profile?.role || 'kasir'
 

@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "POS Steam Cuci Kendaraan",
+  title: "Carwash Management",
   description: "Aplikasi Point of Sale untuk usaha steam cuci mobil dan motor",
   manifest: "/manifest.json",
 };
