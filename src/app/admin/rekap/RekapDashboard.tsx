@@ -180,59 +180,134 @@ export function RekapDashboard({
   async function handleExportExcel() {
     setExportingExcel(true)
     try {
-      const XLSX = await import("xlsx")
+      const ExcelJS = (await import("exceljs")).default
 
-      const rows = harian.map((h) => ({
-        Tanggal: formatTanggalPanjang(h.tanggal),
-        Hari: h.hari,
-        "Motor Kecil": h.motorKecil,
-        "Motor Besar": h.motorBesar,
-        "Mobil Kecil": h.mobilKecil,
-        "Mobil Sedang": h.mobilSedang,
-        "Mobil Besar": h.mobilBesar,
-        "Total Motor": h.totalMotor,
-        "Total Mobil": h.totalMobil,
-        "Pendapatan Kotor": h.pendapatanKotor,
-        "Bagian Karyawan": h.bagianKaryawan,
-        "Pendapatan Bersih": h.pendapatanBersih,
-        Catatan: "",
-      }))
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet("Rekap")
 
-      rows.push({
-        Tanggal: "TOTAL",
-        Hari: "",
-        "Motor Kecil": totalKolom.motorKecil,
-        "Motor Besar": totalKolom.motorBesar,
-        "Mobil Kecil": totalKolom.mobilKecil,
-        "Mobil Sedang": totalKolom.mobilSedang,
-        "Mobil Besar": totalKolom.mobilBesar,
-        "Total Motor": totalKolom.totalMotor,
-        "Total Mobil": totalKolom.totalMobil,
-        "Pendapatan Kotor": totalKolom.pendapatanKotor,
-        "Bagian Karyawan": totalKolom.bagianKaryawan,
-        "Pendapatan Bersih": totalKolom.pendapatanBersih,
-        Catatan: "",
+      const columns = [
+        { header: "Tanggal", key: "tanggal", width: 14 },
+        { header: "Hari", key: "hari", width: 10 },
+        { header: "Motor Kecil", key: "motorKecil", width: 12 },
+        { header: "Motor Besar", key: "motorBesar", width: 12 },
+        { header: "Mobil Kecil", key: "mobilKecil", width: 12 },
+        { header: "Mobil Sedang", key: "mobilSedang", width: 13 },
+        { header: "Mobil Besar", key: "mobilBesar", width: 12 },
+        { header: "Total Motor", key: "totalMotor", width: 12 },
+        { header: "Total Mobil", key: "totalMobil", width: 12 },
+        { header: "Pendapatan Kotor", key: "pendapatanKotor", width: 18 },
+        { header: "Bagian Karyawan", key: "bagianKaryawan", width: 16 },
+        { header: "Pendapatan Bersih", key: "pendapatanBersih", width: 18 },
+        { header: "Catatan", key: "catatan", width: 20 },
+      ]
+      sheet.columns = columns
+
+      // Styling header: biru, teks putih bold, rata tengah
+      const headerRow = sheet.getRow(1)
+      headerRow.eachCell((cell) => {
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4A86E8" } }
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } }
+        cell.alignment = { horizontal: "center", vertical: "middle" }
+        cell.border = {
+          top: { style: "thin" }, bottom: { style: "thin" },
+          left: { style: "thin" }, right: { style: "thin" },
+        }
       })
-      rows.push({
-        Tanggal: "RATA-RATA",
-        Hari: "",
-        "Motor Kecil": Math.round(rataRata.motorKecil * 10) / 10,
-        "Motor Besar": Math.round(rataRata.motorBesar * 10) / 10,
-        "Mobil Kecil": Math.round(rataRata.mobilKecil * 10) / 10,
-        "Mobil Sedang": Math.round(rataRata.mobilSedang * 10) / 10,
-        "Mobil Besar": Math.round(rataRata.mobilBesar * 10) / 10,
-        "Total Motor": Math.round(rataRata.totalMotor * 10) / 10,
-        "Total Mobil": Math.round(rataRata.totalMobil * 10) / 10,
-        "Pendapatan Kotor": Math.round(rataRata.pendapatanKotor),
-        "Bagian Karyawan": Math.round(rataRata.bagianKaryawan),
-        "Pendapatan Bersih": Math.round(rataRata.pendapatanBersih),
-        Catatan: "",
+      headerRow.height = 22
+      sheet.views = [{ state: "frozen", ySplit: 1 }] // freeze header row
+
+      const currencyCols = ["pendapatanKotor", "bagianKaryawan", "pendapatanBersih"]
+      const numberCols = ["motorKecil", "motorBesar", "mobilKecil", "mobilSedang", "mobilBesar", "totalMotor", "totalMobil"]
+
+      // Isi baris data harian
+      harian.forEach((h) => {
+        const row = sheet.addRow({
+          tanggal: formatTanggalPanjang(h.tanggal),
+          hari: h.hari,
+          motorKecil: h.motorKecil,
+          motorBesar: h.motorBesar,
+          mobilKecil: h.mobilKecil,
+          mobilSedang: h.mobilSedang,
+          mobilBesar: h.mobilBesar,
+          totalMotor: h.totalMotor,
+          totalMobil: h.totalMobil,
+          pendapatanKotor: h.pendapatanKotor,
+          bagianKaryawan: h.bagianKaryawan,
+          pendapatanBersih: h.pendapatanBersih,
+          catatan: "",
+        })
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: "hair" }, bottom: { style: "hair" },
+            left: { style: "hair" }, right: { style: "hair" },
+          }
+        })
       })
 
-      const ws = XLSX.utils.json_to_sheet(rows)
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, "Rekap")
-      XLSX.writeFile(wb, `rekap-${dateFrom}_${dateTo}.xlsx`)
+      // Format angka Rupiah untuk kolom uang, rata tengah untuk kolom jumlah unit
+      const lastDataRow = sheet.rowCount
+      for (let r = 2; r <= lastDataRow; r++) {
+        currencyCols.forEach((key) => {
+          const cell = sheet.getRow(r).getCell(columns.findIndex((c) => c.key === key) + 1)
+          cell.numFmt = '"Rp"#,##0'
+        })
+        numberCols.forEach((key) => {
+          const cell = sheet.getRow(r).getCell(columns.findIndex((c) => c.key === key) + 1)
+          cell.alignment = { horizontal: "center" }
+        })
+      }
+
+      // Baris TOTAL - bold, background abu muda
+      const totalRow = sheet.addRow({
+        tanggal: "TOTAL", hari: "",
+        motorKecil: totalKolom.motorKecil, motorBesar: totalKolom.motorBesar,
+        mobilKecil: totalKolom.mobilKecil, mobilSedang: totalKolom.mobilSedang, mobilBesar: totalKolom.mobilBesar,
+        totalMotor: totalKolom.totalMotor, totalMobil: totalKolom.totalMobil,
+        pendapatanKotor: totalKolom.pendapatanKotor, bagianKaryawan: totalKolom.bagianKaryawan,
+        pendapatanBersih: totalKolom.pendapatanBersih, catatan: "",
+      })
+      totalRow.eachCell((cell) => {
+        cell.font = { bold: true }
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8EAED" } }
+        cell.border = { top: { style: "double" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } }
+      })
+      currencyCols.forEach((key) => {
+        sheet.getRow(totalRow.number).getCell(columns.findIndex((c) => c.key === key) + 1).numFmt = '"Rp"#,##0'
+      })
+
+      // Baris RATA-RATA - italic, background ungu muda (mirip referensi asli)
+      const rataRow = sheet.addRow({
+        tanggal: "RATA-RATA", hari: "",
+        motorKecil: Math.round(rataRata.motorKecil * 10) / 10,
+        motorBesar: Math.round(rataRata.motorBesar * 10) / 10,
+        mobilKecil: Math.round(rataRata.mobilKecil * 10) / 10,
+        mobilSedang: Math.round(rataRata.mobilSedang * 10) / 10,
+        mobilBesar: Math.round(rataRata.mobilBesar * 10) / 10,
+        totalMotor: Math.round(rataRata.totalMotor * 10) / 10,
+        totalMobil: Math.round(rataRata.totalMobil * 10) / 10,
+        pendapatanKotor: Math.round(rataRata.pendapatanKotor),
+        bagianKaryawan: Math.round(rataRata.bagianKaryawan),
+        pendapatanBersih: Math.round(rataRata.pendapatanBersih),
+        catatan: "",
+      })
+      rataRow.eachCell((cell) => {
+        cell.font = { italic: true, color: { argb: "FF6B7280" } }
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDE7F6" } }
+        cell.border = { top: { style: "thin" }, bottom: { style: "thin" }, left: { style: "thin" }, right: { style: "thin" } }
+      })
+      currencyCols.forEach((key) => {
+        sheet.getRow(rataRow.number).getCell(columns.findIndex((c) => c.key === key) + 1).numFmt = '"Rp"#,##0'
+      })
+
+      // Trigger download di browser
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `rekap-${dateFrom}_${dateTo}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
     } finally {
       setExportingExcel(false)
     }
@@ -257,7 +332,7 @@ export function RekapDashboard({
       )
 
       const head = [[
-        "Tanggal", "Hari", "Motor Kecil", "Motor Besar", "Mobil kecil", "Mobil Sedang", "Mobil Besar",
+        "Tanggal", "Hari", "Motor Kecil", "Motor Besar", "Mobil Kecil", "Mobil Sedang", "Mobil Besar",
         "Total Motor", "Total Mobil", "Kotor", "Karyawan", "Bersih",
       ]]
 
@@ -389,13 +464,13 @@ export function RekapDashboard({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Tanggal</th>
                 <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Hari</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mtr Kcl</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mtr Bsr</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mbl Kcl</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mbl Sdg</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mbl Bsr</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Tot Mtr</th>
-                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Tot Mbl</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Motor Kecil</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Motor Besar</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mobil Kecil</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mobil Sedang</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Mobil Besar</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Total Motor</th>
+                <th className="px-3 py-3 text-right font-semibold whitespace-nowrap">Total Mobil</th>
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Kotor</th>
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Karyawan</th>
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Bersih</th>
