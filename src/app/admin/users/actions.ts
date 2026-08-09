@@ -164,3 +164,49 @@ export async function toggleAktifUser(userId: string, aktif: boolean) {
   revalidatePath("/admin/users")
   return { success: true }
 }
+
+export async function updateUserProfile(params: {
+  userId: string
+  newUsername: string
+  newNamaLengkap: string
+}) {
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
+
+  const username = params.newUsername.trim()
+  const namaLengkap = params.newNamaLengkap.trim()
+
+  const usernameError = validateUsername(username)
+  if (usernameError) return { error: usernameError }
+
+  const adminClient = createAdminClient()
+  const newEmail = `${username}@carwash.internal`
+
+  // Update email di Supabase Auth JUGA (bukan cuma kolom username di profiles),
+  // karena login pakai konversi username -> email. Kalau cuma update profiles
+  // tanpa update auth.users, username baru ga akan bisa dipakai login.
+  const { error: authUpdateError } = await adminClient.auth.admin.updateUserById(params.userId, {
+    email: newEmail,
+  })
+
+  if (authUpdateError) {
+    console.error("Update auth email error:", authUpdateError)
+    if (authUpdateError.message?.includes("already registered") || authUpdateError.message?.includes("already exists")) {
+      return { error: "Username sudah dipakai user lain" }
+    }
+    return { error: "Gagal mengubah username" }
+  }
+
+  const { error: profileError } = await adminClient
+    .from("profiles")
+    .update({ username, nama_lengkap: namaLengkap || null })
+    .eq("id", params.userId)
+
+  if (profileError) {
+    console.error("Update profile error:", profileError)
+    return { error: "Username di auth berhasil diubah, tapi gagal update profil. Cek manual." }
+  }
+
+  revalidatePath("/admin/users")
+  return { success: true }
+}

@@ -3,19 +3,34 @@
 import { useState, useEffect, useTransition, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { fetchRekap, type RekapHarian, type TransaksiDetail } from "./actions"
 import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-} from "recharts"
+  fetchRekap,
+  updateTransaksi,
+  deleteTransaksi,
+  fetchJenisKendaraanAktif,
+  type RekapHarian,
+  type TransaksiDetail,
+} from "./actions"
+
+function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3500)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300 ${
+      type === "success"
+        ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
+        : "bg-red-50/95 border-red-200 text-red-800"
+    }`}>
+      <span className="text-sm font-medium">{message}</span>
+      <button onClick={onClose} className="ml-2 text-current opacity-50 hover:opacity-100 transition-opacity">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
+      </button>
+    </div>
+  )
+}
 
 function formatRupiah(value: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -65,6 +80,213 @@ function SummaryCard({ label, value, accent }: { label: string; value: string; a
   )
 }
 
+function PaginationControls({
+  page,
+  totalItems,
+  pageSize,
+  onPageChange,
+}: {
+  page: number
+  totalItems: number
+  pageSize: number
+  onPageChange: (page: number) => void
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const startItem = totalItems === 0 ? 0 : (page - 1) * pageSize + 1
+  const endItem = Math.min(page * pageSize, totalItems)
+
+  if (totalItems === 0) return null
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+      <p className="text-xs text-slate-500">
+        Menampilkan <span className="font-medium text-slate-700">{startItem}-{endItem}</span> dari{" "}
+        <span className="font-medium text-slate-700">{totalItems}</span> data
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
+          Sebelumnya
+        </Button>
+        <span className="text-xs text-slate-500 px-2">
+          Halaman {page} dari {totalPages}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(page + 1)}
+        >
+          Berikutnya
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// Modal konfirmasi hapus - selalu tampil sebelum aksi hapus dieksekusi
+function ConfirmDeleteModal({
+  transaksi,
+  onCancel,
+  onConfirm,
+  isPending,
+}: {
+  transaksi: TransaksiDetail
+  onCancel: () => void
+  onConfirm: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5">
+          <div className="w-11 h-11 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Hapus transaksi ini?</h2>
+          <p className="text-sm text-slate-500 mt-2">
+            Transaksi <span className="font-semibold text-slate-700">{transaksi.kategori} {transaksi.ukuran}</span>
+            {transaksi.plat_nomor && <> plat <span className="font-mono font-semibold">{transaksi.plat_nomor}</span></>} senilai{" "}
+            <span className="font-semibold text-slate-700">{formatRupiah(transaksi.tarif_total)}</span> akan dihapus permanen.
+            Tindakan ini <span className="font-semibold text-red-600">tidak bisa dibatalkan</span>.
+          </p>
+        </div>
+        <div className="px-6 pb-6 flex gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isPending}>
+            Batal
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            onClick={onConfirm}
+            disabled={isPending}
+          >
+            {isPending ? "Menghapus..." : "Ya, Hapus"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Modal edit transaksi - ubah jenis kendaraan & plat nomor, dengan
+// konfirmasi terpisah sebelum submit
+function EditTransaksiModal({
+  transaksi,
+  jenisKendaraanList,
+  onCancel,
+  onSaved,
+  onResult,
+}: {
+  transaksi: TransaksiDetail
+  jenisKendaraanList: { id: string; kategori: string; ukuran: string }[]
+  onCancel: () => void
+  onSaved: () => void
+  onResult: (msg: string, type: "success" | "error") => void
+}) {
+  const initialJenisId = jenisKendaraanList.find(
+    (jk) => jk.kategori === transaksi.kategori && jk.ukuran === transaksi.ukuran
+  )?.id || ""
+
+  const [jenisId, setJenisId] = useState(initialJenisId)
+  const [platNomor, setPlatNomor] = useState(transaksi.plat_nomor || "")
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleSubmit() {
+    setError(null)
+    startTransition(async () => {
+      const result = await updateTransaksi({
+        id: transaksi.id,
+        jenisKendaraanId: jenisId,
+        platNomor: platNomor.trim() || null,
+      })
+      if (result.error) {
+        setError(result.error)
+        setShowConfirm(false)
+      } else {
+        onResult("Transaksi berhasil diperbarui", "success")
+        onSaved()
+      }
+    })
+  }
+
+  if (showConfirm) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+          <div className="px-6 py-5">
+            <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Simpan perubahan?</h2>
+            <p className="text-sm text-slate-500 mt-2">
+              Tarif dan pembagian jatah karyawan/pemilik akan dihitung ulang otomatis sesuai jenis kendaraan yang dipilih.
+            </p>
+          </div>
+          {error && (
+            <div className="mx-6 mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">{error}</div>
+          )}
+          <div className="px-6 pb-6 flex gap-3">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowConfirm(false)} disabled={isPending}>
+              Kembali
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleSubmit} disabled={isPending}>
+              {isPending ? "Menyimpan..." : "Ya, Simpan"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900">Edit Transaksi</h2>
+        </div>
+        <div className="px-6 py-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Jenis Kendaraan</label>
+            <select
+              value={jenisId}
+              onChange={(e) => setJenisId(e.target.value)}
+              className="w-full h-11 px-3 text-sm rounded-lg border border-slate-200 bg-white"
+            >
+              {jenisKendaraanList.map((jk) => (
+                <option key={jk.id} value={jk.id}>{jk.kategori} {jk.ukuran}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Plat Nomor</label>
+            <Input
+              value={platNomor}
+              onChange={(e) => setPlatNomor(e.target.value.toUpperCase())}
+              placeholder="Opsional"
+              className="uppercase"
+            />
+          </div>
+        </div>
+        <div className="px-6 pb-6 flex gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+            Batal
+          </Button>
+          <Button type="button" className="flex-1" onClick={() => setShowConfirm(true)} disabled={!jenisId}>
+            Lanjutkan
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function RekapDashboard({
   defaultDateFrom,
   defaultDateTo,
@@ -84,6 +306,19 @@ export function RekapDashboard({
     rataRataPerHari: 0,
   })
   const [view, setView] = useState<"harian" | "detail">("harian")
+  const PAGE_SIZE = 50
+  const [pageHarian, setPageHarian] = useState(1)
+  const [pageDetail, setPageDetail] = useState(1)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [editTarget, setEditTarget] = useState<TransaksiDetail | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<TransaksiDetail | null>(null)
+  const [isDeletingPending, startDeleteTransition] = useTransition()
+  const [jenisKendaraanList, setJenisKendaraanList] = useState<{ id: string; kategori: string; ukuran: string }[]>([])
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type })
+  }
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [exportingExcel, setExportingExcel] = useState(false)
@@ -99,6 +334,8 @@ export function RekapDashboard({
       }
       setHarian(result.harian)
       setDetail(result.detail)
+      setPageHarian(1)
+      setPageDetail(1)
       setTotals({
         totalPendapatanKotor: result.totalPendapatanKotor,
         totalBagianKaryawan: result.totalBagianKaryawan,
@@ -113,37 +350,9 @@ export function RekapDashboard({
     loadData()
   }, [loadData])
 
-  // Data untuk chart perbandingan kategori kendaraan (dijumlah sepanjang periode)
-  const kategoriChartData = useMemo(() => {
-    const totals = harian.reduce(
-      (acc, h) => {
-        acc.motorKecil += h.motorKecil
-        acc.motorBesar += h.motorBesar
-        acc.mobilKecil += h.mobilKecil
-        acc.mobilSedang += h.mobilSedang
-        acc.mobilBesar += h.mobilBesar
-        return acc
-      },
-      { motorKecil: 0, motorBesar: 0, mobilKecil: 0, mobilSedang: 0, mobilBesar: 0 }
-    )
-    return [
-      { kategori: "Motor Kecil", jumlah: totals.motorKecil },
-      { kategori: "Motor Besar", jumlah: totals.motorBesar },
-      { kategori: "Mobil Kecil", jumlah: totals.mobilKecil },
-      { kategori: "Mobil Sedang", jumlah: totals.mobilSedang },
-      { kategori: "Mobil Besar", jumlah: totals.mobilBesar },
-    ]
-  }, [harian])
-
-  const trenChartData = useMemo(
-    () =>
-      harian.map((h) => ({
-        tanggal: formatTanggalSingkat(h.tanggal),
-        "Pendapatan Kotor": h.pendapatanKotor,
-        "Pendapatan Bersih": h.pendapatanBersih,
-      })),
-    [harian]
-  )
+  useEffect(() => {
+    fetchJenisKendaraanAktif().then(setJenisKendaraanList)
+  }, [])
 
   const rataRata = useMemo(() => {
     const n = harian.length || 1
@@ -177,6 +386,53 @@ export function RekapDashboard({
     [harian]
   )
 
+  // Search cuma berlaku di tabel Detail Transaksi - cari berdasarkan plat
+  // nomor atau nama kasir (case-insensitive, contains)
+  const detailFiltered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return detail
+    return detail.filter(
+      (t) =>
+        (t.plat_nomor || "").toLowerCase().includes(q) ||
+        (t.kasir_nama || "").toLowerCase().includes(q) ||
+        `${t.kategori} ${t.ukuran}`.toLowerCase().includes(q)
+    )
+  }, [detail, searchQuery])
+
+  // Reset ke halaman 1 tiap kali search query berubah, biar ga nyangkut
+  // di halaman yang jadi kosong setelah difilter
+  useEffect(() => {
+    setPageDetail(1)
+  }, [searchQuery])
+
+  // Data yang ditampilkan di tabel = 1 halaman saja (50 baris).
+  // PENTING: totalKolom & rataRata di atas tetap dihitung dari SEMUA data
+  // (bukan cuma yang lagi ditampilkan), jadi baris TOTAL/RATA-RATA di
+  // footer tabel tetap akurat walau tabelnya dipaginate.
+  const harianPaged = useMemo(
+    () => harian.slice((pageHarian - 1) * PAGE_SIZE, pageHarian * PAGE_SIZE),
+    [harian, pageHarian]
+  )
+  const detailPaged = useMemo(
+    () => detailFiltered.slice((pageDetail - 1) * PAGE_SIZE, pageDetail * PAGE_SIZE),
+    [detailFiltered, pageDetail]
+  )
+
+  function handleDeleteConfirm() {
+    if (!deleteTarget) return
+    startDeleteTransition(async () => {
+      const result = await deleteTransaksi(deleteTarget.id)
+      if (result.error) {
+        showToast(result.error, "error")
+      } else {
+        showToast("Transaksi berhasil dihapus", "success")
+        setDetail((prev) => prev.filter((t) => t.id !== deleteTarget.id))
+        loadData() // refresh juga ringkasan harian & totals biar konsisten
+      }
+      setDeleteTarget(null)
+    })
+  }
+
   async function handleExportExcel() {
     setExportingExcel(true)
     try {
@@ -198,7 +454,6 @@ export function RekapDashboard({
         { header: "Pendapatan Kotor", key: "pendapatanKotor", width: 18 },
         { header: "Bagian Karyawan", key: "bagianKaryawan", width: 16 },
         { header: "Pendapatan Bersih", key: "pendapatanBersih", width: 18 },
-        { header: "Catatan", key: "catatan", width: 20 },
       ]
       sheet.columns = columns
 
@@ -234,7 +489,6 @@ export function RekapDashboard({
           pendapatanKotor: h.pendapatanKotor,
           bagianKaryawan: h.bagianKaryawan,
           pendapatanBersih: h.pendapatanBersih,
-          catatan: "",
         })
         row.eachCell((cell) => {
           cell.border = {
@@ -332,8 +586,8 @@ export function RekapDashboard({
       )
 
       const head = [[
-        "Tanggal", "Hari", "Motor Kecil", "Motor Besar", "Mobil Kecil", "Mobil Sedang", "Mobil Besar",
-        "Total Motor", "Total Mobil", "Kotor", "Karyawan", "Bersih",
+        "Tanggal", "Hari", "Mtr Kcl", "Mtr Bsr", "Mbl Kcl", "Mbl Sdg", "Mbl Bsr",
+        "Tot Mtr", "Tot Mbl", "Kotor", "Karyawan", "Bersih",
       ]]
 
       const body = harian.map((h) => [
@@ -405,55 +659,38 @@ export function RekapDashboard({
         <SummaryCard label="Rata-rata / Hari" value={formatRupiah(Math.round(totals.rataRataPerHari))} accent="slate" />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-slate-700 mb-4">Tren Pendapatan</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <LineChart data={trenChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="tanggal" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={formatRupiahSingkat} />
-              <Tooltip formatter={(value) => formatRupiah(Number(value ?? 0))} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="Pendapatan Kotor" stroke="#6366f1" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="Pendapatan Bersih" stroke="#10b981" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+      {/* Toggle view + Search (search cuma relevan buat Detail Transaksi) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setView("harian")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              view === "harian" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Ringkasan Harian
+          </button>
+          <button
+            onClick={() => setView("detail")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              view === "detail" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+            }`}
+          >
+            Detail Transaksi
+          </button>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-slate-700 mb-4">Jumlah Unit per Kategori</h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={kategoriChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="kategori" tick={{ fontSize: 10 }} angle={-15} textAnchor="end" height={50} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip />
-              <Bar dataKey="jumlah" fill="#6366f1" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Toggle view */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setView("harian")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            view === "harian" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Ringkasan Harian
-        </button>
-        <button
-          onClick={() => setView("detail")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            view === "detail" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Detail Transaksi
-        </button>
+        {view === "detail" && (
+          <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari plat nomor, kasir, jenis..."
+              className="pl-9 h-10"
+            />
+          </div>
+        )}
       </div>
 
       {/* Tabel Ringkasan Harian */}
@@ -477,7 +714,7 @@ export function RekapDashboard({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {harian.map((h) => (
+              {harianPaged.map((h) => (
                 <tr key={h.tanggal} className="hover:bg-slate-50/60">
                   <td className="px-4 py-2.5 whitespace-nowrap font-medium text-slate-900">{formatTanggalSingkat(h.tanggal)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{h.hari}</td>
@@ -530,6 +767,12 @@ export function RekapDashboard({
               </tfoot>
             )}
           </table>
+          <PaginationControls
+            page={pageHarian}
+            totalItems={harian.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPageHarian}
+          />
         </div>
       )}
 
@@ -547,29 +790,82 @@ export function RekapDashboard({
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Tarif</th>
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Karyawan</th>
                 <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Bersih</th>
+                <th className="px-4 py-3 text-center font-semibold whitespace-nowrap">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {detail.map((t) => (
+              {detailPaged.map((t) => (
                 <tr key={t.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-2.5 whitespace-nowrap text-slate-900">{formatTanggalSingkat(t.tanggal_waktu)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{formatWaktu(t.tanggal_waktu)}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap">{t.kategori} {t.ukuran}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap font-mono text-xs">{t.plat_nomor || "-"}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{t.kasir_username || "-"}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{t.kasir_nama || "-"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatRupiah(t.tarif_total)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{formatRupiah(t.tarif_jatah_karyawan)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600">{formatRupiah(t.tarif_jatah_pemilik)}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => setEditTarget(t)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                        title="Edit transaksi"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(t)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Hapus transaksi"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {detail.length === 0 && !isPending && (
+              {detailFiltered.length === 0 && !isPending && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Tidak ada transaksi untuk periode ini</td>
+                  <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                    {searchQuery ? "Tidak ada hasil yang cocok" : "Tidak ada transaksi untuk periode ini"}
+                  </td>
                 </tr>
               )}
             </tbody>
           </table>
+          <PaginationControls
+            page={pageDetail}
+            totalItems={detailFiltered.length}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPageDetail}
+          />
         </div>
+      )}
+
+      {editTarget && (
+        <EditTransaksiModal
+          transaksi={editTarget}
+          jenisKendaraanList={jenisKendaraanList}
+          onCancel={() => setEditTarget(null)}
+          onSaved={() => {
+            setEditTarget(null)
+            loadData()
+          }}
+          onResult={showToast}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          transaksi={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          isPending={isDeletingPending}
+        />
+      )}
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
     </div>
   )

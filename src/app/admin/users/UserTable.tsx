@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { createUser, resetPassword, updateUserRole, toggleAktifUser } from "./actions"
+import { createUser, resetPassword, updateUserRole, toggleAktifUser, updateUserProfile } from "./actions"
 
 type UserProfile = {
   id: string
@@ -216,6 +216,89 @@ function ResetPasswordModal({ user, onClose, onResult }: { user: UserProfile; on
   )
 }
 
+// Modal edit akun - ubah username & nama lengkap user yang sudah ada
+function EditUserModal({ user, onClose, onResult }: { user: UserProfile; onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
+  const [username, setUsername] = useState(user.username)
+  const [namaLengkap, setNamaLengkap] = useState(user.nama_lengkap || "")
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const usernameChanged = username.trim() !== user.username
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+
+    startTransition(async () => {
+      const result = await updateUserProfile({
+        userId: user.id,
+        newUsername: username,
+        newNamaLengkap: namaLengkap,
+      })
+      if (result.error) {
+        setError(result.error)
+      } else {
+        onResult(`Akun ${user.username} berhasil diperbarui`, "success")
+        onClose()
+      }
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900">Edit Akun</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Username</label>
+            <Input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="misal: kasir2"
+              required
+              autoFocus
+            />
+            <p className="text-xs text-slate-400">Huruf, angka, underscore saja. Tanpa spasi atau @.</p>
+            {usernameChanged && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
+                Username dipakai untuk login. Kalau diganti, user harus pakai username baru ini
+                mulai login berikutnya.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Nama Lengkap</label>
+            <Input
+              value={namaLengkap}
+              onChange={(e) => setNamaLengkap(e.target.value)}
+              placeholder="Opsional"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
+              Batal
+            </Button>
+            <Button type="submit" className="flex-1" disabled={isPending}>
+              {isPending ? "Menyimpan..." : "Simpan"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function RoleBadge({ role }: { role: string }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -245,6 +328,7 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [resetPasswordFor, setResetPasswordFor] = useState<UserProfile | null>(null)
+  const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
   const [pendingAction, setPendingAction] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
 
@@ -345,6 +429,14 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setEditTarget(userItem)}
+                  >
+                    Edit
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => setResetPasswordFor(userItem)}
                   >
                     Reset Password
@@ -383,6 +475,14 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
         <ResetPasswordModal
           user={resetPasswordFor}
           onClose={() => setResetPasswordFor(null)}
+          onResult={showToast}
+        />
+      )}
+
+      {editTarget && (
+        <EditUserModal
+          user={editTarget}
+          onClose={() => setEditTarget(null)}
           onResult={showToast}
         />
       )}

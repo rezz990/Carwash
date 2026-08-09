@@ -1,6 +1,28 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
 import { createClient } from "@/utils/supabase/server"
+
+async function requireAdmin() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    return { error: "Anda harus login" as const }
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profile?.role !== "admin") {
+    return { error: "Hanya admin yang bisa mengubah/menghapus transaksi" as const }
+  }
+
+  return { error: null }
+}
 
 export type RekapHarian = {
   tanggal: string // YYYY-MM-DD
@@ -26,7 +48,7 @@ export type TransaksiDetail = {
   tarif_jatah_pemilik: number
   kategori: string
   ukuran: string
-  kasir_username: string | null
+  kasir_nama: string | null // nama_lengkap kalau ada, fallback ke username
 }
 
 export type RekapResult = {
@@ -90,7 +112,7 @@ export async function fetchRekap(params: {
   const { data: transaksi, error } = await supabase
     .from("transaksi")
     .select(
-      "id, tanggal_waktu, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, jenis_kendaraan:jenis_kendaraan_id(kategori, ukuran), profiles:kasir_id(username)"
+      "id, tanggal_waktu, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, jenis_kendaraan:jenis_kendaraan_id(kategori, ukuran), profiles:kasir_id(username, nama_lengkap)"
     )
     .gte("tanggal_waktu", startDate)
     .lte("tanggal_waktu", endDate)
@@ -118,7 +140,7 @@ export async function fetchRekap(params: {
     tarif_jatah_karyawan: number
     tarif_jatah_pemilik: number
     jenis_kendaraan: { kategori: string; ukuran: string } | null
-    profiles: { username: string } | null
+    profiles: { username: string; nama_lengkap: string | null } | null
   }>) || []
 
   // Agregasi per hari
@@ -171,7 +193,7 @@ export async function fetchRekap(params: {
     tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik) || 0,
     kategori: row.jenis_kendaraan?.kategori || "-",
     ukuran: row.jenis_kendaraan?.ukuran || "-",
-    kasir_username: row.profiles?.username || null,
+    kasir_nama: row.profiles?.nama_lengkap || row.profiles?.username || null,
   })).reverse() // terbaru duluan untuk tampilan detail
 
   const totalPendapatanKotor = harian.reduce((acc, h) => acc + h.pendapatanKotor, 0)
@@ -189,4 +211,76 @@ export async function fetchRekap(params: {
     totalTransaksi,
     rataRataPerHari,
   }
+}
+
+export async function updateTransaksi(params: {
+  id: string
+  jenisKendaraanId: string
+  platNomor: string | null
+}) {
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
+
+  const supabase = await createClient()
+
+  // Ambil tarif & split terbaru dari jenis_kendaraan yang dipilih (bisa saja
+  // beda dari kategori transaksi sebelumnya kalau admin mengubah jenis
+  // kendaraan lewat form edit)
+  const { data: jenisKendaraan, error: jkError } = await supabase
+    .from("jenis_kendaraan")
+    .select("tarif_default, jatah_karyawan, jatah_pemilik")
+    .eq("id", params.jenisKendaraanId)
+    .single()
+
+  if (jkError || !jenisKendaraan) {
+    return { error: "Gagal mengambil data tarif kendaraan" }
+  }
+
+  const { error } = await supabase
+    .from("transaksi")
+    .update({
+      jenis_kendaraan_id: params.jenisKendaraanId,
+      plat_nomor: params.platNomor,
+      tarif_total: jenisKendaraan.tarif_default,
+      tarif_jatah_karyawan: jenisKendaraan.jatah_karyawan,
+      tarif_jatah_pemilik: jenisKendaraan.jatah_pemilik,
+    })
+    .eq("id", params.id)
+
+  if (error) {
+    console.error("Update transaksi error:", error)
+    return { error: "Gagal mengubah transaksi" }
+  }
+
+  revalidatePath("/admin/rekap")
+  return { success: true }
+}
+
+export async function deleteTransaksi(id: string) {
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
+
+  const supabase = await createClient()
+  const { error } = await supabase.from("transaksi").delete().eq("id", id)
+
+  if (error) {
+    console.error("Delete transaksi error:", error)
+    return { error: "Gagal menghapus transaksi" }
+  }
+
+  revalidatePath("/admin/rekap")
+  return { success: true }
+}
+
+export async function fetchJenisKendaraanAktif() {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("jenis_kendaraan")
+    .select("id, kategori, ukuran")
+    .eq("aktif", true)
+    .order("kategori", { ascending: false })
+    .order("ukuran", { ascending: true })
+
+  if (error) return []
+  return data || []
 }
