@@ -3,7 +3,7 @@
 import { useState, useTransition, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { updateTarifDefault, toggleAktifJenisKendaraan } from "./actions"
+import { updateTarifDefault, toggleAktifJenisKendaraan, createJenisKendaraan } from "./actions"
 
 type JenisKendaraan = {
   id: string
@@ -243,10 +243,148 @@ function KategoriIcon({ kategori }: { kategori: string }) {
   )
 }
 
+// Modal tambah jenis kendaraan/kategori baru
+function AddKategoriModal({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
+  const [kategori, setKategori] = useState("")
+  const [ukuran, setUkuran] = useState("")
+  const [tarif, setTarif] = useState("")
+  const [jatahKaryawan, setJatahKaryawan] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const tarifNum = parseFloat(tarif) || 0
+  const jatahKaryawanNum = parseFloat(jatahKaryawan) || 0
+  const jatahPemilikPreview = Math.max(tarifNum - jatahKaryawanNum, 0)
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+
+    const tarifVal = parseFloat(tarif)
+    const jatahVal = parseFloat(jatahKaryawan)
+
+    if (!kategori.trim() || !ukuran.trim()) {
+      setError("Kategori dan ukuran wajib diisi")
+      return
+    }
+    if (isNaN(tarifVal) || tarifVal < 0) {
+      setError("Tarif harus berupa angka positif")
+      return
+    }
+    if (isNaN(jatahVal) || jatahVal < 0) {
+      setError("Jatah karyawan harus berupa angka positif")
+      return
+    }
+    if (jatahVal > tarifVal) {
+      setError("Jatah karyawan tidak boleh melebihi tarif total")
+      return
+    }
+
+    startTransition(async () => {
+      const result = await createJenisKendaraan({
+        kategori,
+        ukuran,
+        tarifDefault: tarifVal,
+        jatahKaryawan: jatahVal,
+      })
+      if (result.error) {
+        setError(result.error)
+      } else {
+        onResult(`${kategori} ${ukuran} berhasil ditambahkan`, "success")
+        onClose()
+      }
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5 border-b border-slate-100">
+          <h2 className="text-lg font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Kategori</label>
+              <Input
+                value={kategori}
+                onChange={(e) => setKategori(e.target.value)}
+                placeholder="misal: Truk"
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Ukuran</label>
+              <Input
+                value={ukuran}
+                onChange={(e) => setUkuran(e.target.value)}
+                placeholder="misal: Sedang"
+                required
+              />
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 -mt-2">
+            Kategori boleh yang sudah ada (misal &quot;Motor&quot;) untuk nambah ukuran baru, atau kategori benar-benar baru.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Tarif</label>
+              <Input
+                type="number"
+                min="0"
+                step="1000"
+                value={tarif}
+                onChange={(e) => setTarif(e.target.value)}
+                placeholder="0"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Jatah Karyawan</label>
+              <Input
+                type="number"
+                min="0"
+                step="1000"
+                value={jatahKaryawan}
+                onChange={(e) => setJatahKaryawan(e.target.value)}
+                placeholder="0"
+                required
+              />
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            Jatah pemilik (otomatis): <span className="font-semibold text-slate-700">{formatRupiah(jatahPemilikPreview)}</span>
+          </p>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
+              Batal
+            </Button>
+            <Button type="submit" className="flex-1" disabled={isPending}>
+              {isPending ? "Menyimpan..." : "Simpan"}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export function TarifTable({ data }: { data: JenisKendaraan[] }) {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
   const [pendingToggles, setPendingToggles] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
+  const [showAddModal, setShowAddModal] = useState(false)
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type })
@@ -272,12 +410,13 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
     })
   }
 
-  // Kelompokkan data berdasarkan kategori
-  const motorData = data.filter((d) => d.kategori === "Motor")
-  const mobilData = data.filter((d) => d.kategori === "Mobil")
+  // Kelompokkan data berdasarkan kategori yang BENERAN ADA di data (dinamis,
+  // bukan hardcode "Motor"/"Mobil" doang) - supaya kategori baru yang
+  // ditambahin admin otomatis kebuat grup sendiri
+  const kategoriList = Array.from(new Set(data.map((d) => d.kategori)))
 
   const renderGroup = (title: string, items: JenisKendaraan[]) => (
-    <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+    <div key={title} className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 px-6 py-3.5 border-b border-slate-200/60">
         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
       </div>
@@ -324,8 +463,23 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
 
   return (
     <div className="space-y-6">
-      {renderGroup("Motor", motorData)}
-      {renderGroup("Mobil", mobilData)}
+      <div className="flex justify-end">
+        <Button onClick={() => setShowAddModal(true)}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+          Tambah Jenis Kendaraan
+        </Button>
+      </div>
+
+      {kategoriList.map((kategori) =>
+        renderGroup(kategori, data.filter((d) => d.kategori === kategori))
+      )}
+
+      {showAddModal && (
+        <AddKategoriModal
+          onClose={() => setShowAddModal(false)}
+          onResult={showToast}
+        />
+      )}
 
       {toast && (
         <Toast
