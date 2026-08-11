@@ -210,3 +210,47 @@ export async function updateUserProfile(params: {
   revalidatePath("/admin/users")
   return { success: true }
 }
+
+export async function deleteUser(userId: string) {
+  const { error: authError, user: currentUser } = await requireAdmin()
+  if (authError) return { error: authError }
+
+  if (currentUser?.id === userId) {
+    return { error: "Tidak bisa menghapus akun sendiri" }
+  }
+
+  const supabase = await createClient()
+
+  // Cek dulu apakah user ini pernah input transaksi. Kalau iya, JANGAN
+  // dihapus - transaksi lama akan kehilangan referensi kasir_id-nya.
+  // Database sebenarnya juga akan menolak (foreign key constraint), tapi
+  // dicek manual dulu di sini supaya pesan errornya jelas buat admin.
+  const { count, error: countError } = await supabase
+    .from("transaksi")
+    .select("id", { count: "exact", head: true })
+    .eq("kasir_id", userId)
+
+  if (countError) {
+    console.error("Check transaksi count error:", countError)
+    return { error: "Gagal mengecek riwayat transaksi user ini" }
+  }
+
+  if (count && count > 0) {
+    return {
+      error: `User ini punya ${count} riwayat transaksi dan tidak bisa dihapus permanen (data transaksi akan kehilangan referensi). Gunakan "Nonaktifkan" saja untuk mencegah user ini login, tanpa menghapus riwayatnya.`,
+    }
+  }
+
+  const adminClient = createAdminClient()
+  // Hapus dari auth.users - kolom profiles.id punya "on delete cascade"
+  // ke auth.users(id), jadi row profiles ikut terhapus otomatis.
+  const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId)
+
+  if (deleteError) {
+    console.error("Delete user error:", deleteError)
+    return { error: "Gagal menghapus user" }
+  }
+
+  revalidatePath("/admin/users")
+  return { success: true }
+}

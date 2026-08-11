@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { createUser, resetPassword, updateUserRole, toggleAktifUser, updateUserProfile } from "./actions"
+import { createUser, resetPassword, updateUserRole, toggleAktifUser, updateUserProfile, deleteUser } from "./actions"
 
 type UserProfile = {
   id: string
@@ -299,6 +299,53 @@ function EditUserModal({ user, onClose, onResult }: { user: UserProfile; onClose
   )
 }
 
+// Modal konfirmasi hapus akun - permanen, selalu tampil sebelum eksekusi
+function ConfirmDeleteUserModal({
+  user,
+  onCancel,
+  onConfirm,
+  isPending,
+}: {
+  user: UserProfile
+  onCancel: () => void
+  onConfirm: () => void
+  isPending: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+        <div className="px-6 py-5">
+          <div className="w-11 h-11 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+          </div>
+          <h2 className="text-lg font-bold text-slate-900">Hapus akun {user.username}?</h2>
+          <p className="text-sm text-slate-500 mt-2">
+            Akun ini akan dihapus <span className="font-semibold text-red-600">permanen</span> dan tidak bisa
+            login lagi. Tindakan ini tidak bisa dibatalkan.
+          </p>
+          <p className="text-xs text-slate-400 mt-3 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
+            Kalau user ini pernah punya riwayat transaksi, penghapusan akan otomatis ditolak sistem — pakai
+            &quot;Nonaktifkan&quot; sebagai gantinya.
+          </p>
+        </div>
+        <div className="px-6 pb-6 flex gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isPending}>
+            Batal
+          </Button>
+          <Button
+            type="button"
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            onClick={onConfirm}
+            disabled={isPending}
+          >
+            {isPending ? "Menghapus..." : "Ya, Hapus Permanen"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RoleBadge({ role }: { role: string }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -329,11 +376,26 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
   const [showAddModal, setShowAddModal] = useState(false)
   const [resetPasswordFor, setResetPasswordFor] = useState<UserProfile | null>(null)
   const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null)
+  const [isDeletingPending, startDeleteTransition] = useTransition()
   const [pendingAction, setPendingAction] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
 
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type })
+  }
+
+  function handleDeleteConfirm() {
+    if (!deleteTarget) return
+    startDeleteTransition(async () => {
+      const result = await deleteUser(deleteTarget.id)
+      if (result.error) {
+        showToast(result.error, "error")
+      } else {
+        showToast(`Akun ${deleteTarget.username} berhasil dihapus`, "success")
+      }
+      setDeleteTarget(null)
+    })
   }
 
   const handleRoleChange = (userItem: UserProfile, newRole: string) => {
@@ -451,6 +513,15 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
                   >
                     {userItem.aktif ? "Nonaktifkan" : "Aktifkan"}
                   </Button>
+
+                  <button
+                    onClick={() => setDeleteTarget(userItem)}
+                    disabled={isSelf}
+                    className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    title={isSelf ? "Tidak bisa menghapus akun sendiri" : "Hapus akun"}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  </button>
                 </div>
               </div>
             )
@@ -484,6 +555,15 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
           user={editTarget}
           onClose={() => setEditTarget(null)}
           onResult={showToast}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDeleteUserModal
+          user={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          isPending={isDeletingPending}
         />
       )}
 
