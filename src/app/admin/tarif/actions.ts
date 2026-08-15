@@ -1,56 +1,46 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/utils/supabase/server"
+import pool from "@/lib/db"
+import { requireAdmin } from "@/lib/authz"
 
 export async function updateTarifDefault(id: string, tarifDefault: number, jatahKaryawan: number) {
-  const supabase = await createClient()
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
 
-  // Validasi: tarif & jatah tidak boleh negatif
   if (tarifDefault < 0 || jatahKaryawan < 0) {
     return { error: "Tarif dan jatah karyawan tidak boleh negatif" }
   }
-
-  // Validasi: jatah karyawan tidak boleh melebihi tarif total
   if (jatahKaryawan > tarifDefault) {
     return { error: "Jatah karyawan tidak boleh melebihi tarif total" }
   }
 
-  // jatah_pemilik dihitung otomatis supaya selalu konsisten dengan
-  // constraint database: jatah_karyawan + jatah_pemilik = tarif_default
   const jatahPemilik = tarifDefault - jatahKaryawan
 
-  const { error } = await supabase
-    .from("jenis_kendaraan")
-    .update({
-      tarif_default: tarifDefault,
-      jatah_karyawan: jatahKaryawan,
-      jatah_pemilik: jatahPemilik,
-    })
-    .eq("id", id)
-
-  if (error) {
+  try {
+    await pool.query(
+      "UPDATE jenis_kendaraan SET tarif_default = ?, jatah_karyawan = ?, jatah_pemilik = ? WHERE id = ?",
+      [tarifDefault, jatahKaryawan, jatahPemilik, id]
+    )
+  } catch (error) {
     console.error("Update tarif error:", error)
-    return { error: "Gagal mengupdate tarif. Pastikan Anda memiliki akses admin." }
+    return { error: "Gagal mengupdate tarif" }
   }
 
-  // Revalidate halaman kasir agar form transaksi pakai tarif terbaru
   revalidatePath("/", "layout")
   revalidatePath("/admin/tarif")
   return { success: true }
 }
 
 export async function toggleAktifJenisKendaraan(id: string, aktif: boolean) {
-  const supabase = await createClient()
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
 
-  const { error } = await supabase
-    .from("jenis_kendaraan")
-    .update({ aktif })
-    .eq("id", id)
-
-  if (error) {
+  try {
+    await pool.query("UPDATE jenis_kendaraan SET aktif = ? WHERE id = ?", [aktif, id])
+  } catch (error) {
     console.error("Toggle aktif error:", error)
-    return { error: "Gagal mengubah status. Pastikan Anda memiliki akses admin." }
+    return { error: "Gagal mengubah status" }
   }
 
   revalidatePath("/", "layout")
@@ -64,7 +54,8 @@ export async function createJenisKendaraan(params: {
   tarifDefault: number
   jatahKaryawan: number
 }) {
-  const supabase = await createClient()
+  const { error: authError } = await requireAdmin()
+  if (authError) return { error: authError }
 
   const kategori = params.kategori.trim()
   const ukuran = params.ukuran.trim()
@@ -81,22 +72,17 @@ export async function createJenisKendaraan(params: {
 
   const jatahPemilik = params.tarifDefault - params.jatahKaryawan
 
-  const { error } = await supabase.from("jenis_kendaraan").insert({
-    kategori,
-    ukuran,
-    tarif_default: params.tarifDefault,
-    jatah_karyawan: params.jatahKaryawan,
-    jatah_pemilik: jatahPemilik,
-    aktif: true,
-  })
-
-  if (error) {
+  try {
+    await pool.query(
+      "INSERT INTO jenis_kendaraan (id, kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik, aktif) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [crypto.randomUUID(), kategori, ukuran, params.tarifDefault, params.jatahKaryawan, jatahPemilik, true]
+    )
+  } catch (error: any) {
     console.error("Create jenis kendaraan error:", error)
-    if (error.code === "23505") {
-      // unique constraint violation (kategori, ukuran)
+    if (error.code === "ER_DUP_ENTRY") {
       return { error: `Kategori "${kategori} ${ukuran}" sudah ada` }
     }
-    return { error: "Gagal menambahkan jenis kendaraan. Pastikan Anda memiliki akses admin." }
+    return { error: "Gagal menambahkan jenis kendaraan" }
   }
 
   revalidatePath("/", "layout")

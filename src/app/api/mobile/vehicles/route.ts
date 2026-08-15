@@ -1,0 +1,4 @@
+import type { RowDataPacket } from "mysql2"
+import pool from "@/lib/db"
+import { jsonError, jsonOk, requireMobileAuth } from "@/lib/mobile/http"
+export async function GET(request: Request) { try { const auth = await requireMobileAuth(request, ["kasir"]); if ("error" in auth) return auth.error; const [rows] = await pool.query<RowDataPacket[]>("SELECT id, kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik FROM jenis_kendaraan WHERE aktif = 1 ORDER BY kategori ASC, ukuran ASC"); return jsonOk({ data: rows.map(r => ({ id: String(r.id), kategori: String(r.kategori), ukuran: String(r.ukuran), tarif: Number(r.tarif_default), jatahKaryawan: Number(r.jatah_karyawan), jatahPemilik: Number(r.jatah_pemilik) })) }) } catch (error) { console.error(error); return jsonError(500, "INTERNAL_ERROR", "Gagal memuat jenis kendaraan") } }

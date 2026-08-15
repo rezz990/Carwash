@@ -1,6 +1,9 @@
 "use server"
 
-import { createClient } from "@/utils/supabase/server"
+import pool from "@/lib/db"
+import type { RowDataPacket } from "mysql2"
+import { jakartaDateToUtcSql, utcSqlToIso } from "@/lib/datetime"
+import { requireLogin } from "@/lib/authz"
 
 export type TransaksiRow = {
   id: string
@@ -28,75 +31,85 @@ export async function fetchTransaksi(params: {
   dateTo?: string
   jenisKendaraanId?: string
 }): Promise<FetchTransaksiResult> {
-  const supabase = await createClient()
+  const { error: authError } = await requireLogin()
+  if (authError) return { data: [], totalCount: 0, totalPendapatan: 0, error: authError }
 
   const { page, dateFrom, dateTo, jenisKendaraanId } = params
   const from = (page - 1) * PAGE_SIZE
-  const to = from + PAGE_SIZE - 1
 
-  // Build query untuk data (paginated)
-  let query = supabase
-    .from("transaksi")
-    .select("id, tanggal_waktu, plat_nomor, tarif_total, jenis_kendaraan:jenis_kendaraan_id(kategori, ukuran)", { count: "exact" })
-    .order("tanggal_waktu", { ascending: false })
-    .range(from, to)
+  let whereClauses: string[] = []
+  let queryParams: any[] = []
 
-  // Build query terpisah untuk sum total pendapatan (tanpa pagination)
-  let sumQuery = supabase
-    .from("transaksi")
-    .select("tarif_total")
-
-  // Apply filters ke kedua query
   if (dateFrom) {
-    const startDate = `${dateFrom}T00:00:00`
-    query = query.gte("tanggal_waktu", startDate)
-    sumQuery = sumQuery.gte("tanggal_waktu", startDate)
+    whereClauses.push("t.tanggal_waktu >= ?")
+    queryParams.push(jakartaDateToUtcSql(dateFrom))
   }
 
   if (dateTo) {
-    const endDate = `${dateTo}T23:59:59`
-    query = query.lte("tanggal_waktu", endDate)
-    sumQuery = sumQuery.lte("tanggal_waktu", endDate)
+    whereClauses.push("t.tanggal_waktu <= ?")
+    queryParams.push(jakartaDateToUtcSql(dateTo, true))
   }
 
   if (jenisKendaraanId) {
-    query = query.eq("jenis_kendaraan_id", jenisKendaraanId)
-    sumQuery = sumQuery.eq("jenis_kendaraan_id", jenisKendaraanId)
+    whereClauses.push("t.jenis_kendaraan_id = ?")
+    queryParams.push(jenisKendaraanId)
   }
 
-  const [dataResult, sumResult] = await Promise.all([query, sumQuery])
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : ""
 
-  if (dataResult.error) {
-    console.error("Fetch transaksi error:", dataResult.error)
+  try {
+    const dataQuery = `
+      SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran
+      FROM transaksi t
+      LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
+      ${whereSql}
+      ORDER BY t.tanggal_waktu DESC
+      LIMIT ? OFFSET ?
+    `
+    const [dataRows] = await pool.query<RowDataPacket[]>(dataQuery, [...queryParams, PAGE_SIZE, from])
+
+    const countQuery = `
+      SELECT COUNT(t.id) as count, SUM(t.tarif_total) as sum
+      FROM transaksi t
+      ${whereSql}
+    `
+    const [countRows] = await pool.query<RowDataPacket[]>(countQuery, queryParams)
+
+    const data = dataRows.map((row) => ({
+      id: row.id,
+      tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
+      plat_nomor: row.plat_nomor,
+      tarif_total: Number(row.tarif_total) || 0,
+      jenis_kendaraan: {
+        kategori: row.kategori || "-",
+        ukuran: row.ukuran || "-",
+      },
+    }))
+
+    return {
+      data,
+      totalCount: Number(countRows[0].count) || 0,
+      totalPendapatan: Number(countRows[0].sum) || 0,
+    }
+  } catch (error) {
+    console.error("Fetch transaksi error:", error)
     return { data: [], totalCount: 0, totalPendapatan: 0, error: "Gagal memuat data transaksi" }
-  }
-
-  // Hitung sum pendapatan dari semua row yang match filter
-  let totalPendapatan = 0
-  if (!sumResult.error && sumResult.data) {
-    totalPendapatan = sumResult.data.reduce((acc, row) => acc + (Number(row.tarif_total) || 0), 0)
-  }
-
-  return {
-    data: (dataResult.data as unknown as TransaksiRow[]) || [],
-    totalCount: dataResult.count || 0,
-    totalPendapatan,
   }
 }
 
 export async function fetchJenisKendaraanList() {
-  const supabase = await createClient()
+  const { error: authError } = await requireLogin()
+  if (authError) return []
 
-  const { data, error } = await supabase
-    .from("jenis_kendaraan")
-    .select("id, kategori, ukuran")
-    .order("kategori", { ascending: false })
-    .order("ukuran", { ascending: true })
-
-  if (error) {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, kategori, ukuran
+      FROM jenis_kendaraan
+      ORDER BY kategori DESC, ukuran ASC
+    `)
+    return rows as { id: string; kategori: string; ukuran: string }[]
+  } catch (error) {
     console.error("Fetch jenis kendaraan error:", error)
     return []
   }
-
-  return data || []
 }

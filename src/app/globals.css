@@ -24,3 +24,62 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+/* Responsive foundation for phones, tablets and desktop */
+html {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px; /* prevents iOS Safari auto-zoom on form controls */
+}
+
+/* Keep wide data tables usable on small screens */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+/* Prevent long IDs, plate numbers and URLs from blowing up cards */
+.break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Better mobile tap targets */
+@media (max-width: 767px) {
+  button,
+  [role="button"] {
+    min-height: 40px;
+  }
+
+  /* Avoid accidental horizontal overflow from charts/large content */
+  svg,
+  canvas {
+    max-width: 100%;
+  }
+}
+
+/* Respect devices with a bottom safe-area, especially iPhones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

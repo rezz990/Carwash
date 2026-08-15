@@ -1,26 +1,34 @@
-import { createClient } from "@/utils/supabase/server"
+import pool from "@/lib/db"
+import type { RowDataPacket } from "mysql2"
 import { TarifTable } from "./TarifTable"
 
 export default async function TarifPage() {
-  const supabase = await createClient()
-
-  const { data: jenisKendaraan, error } = await supabase
-    .from("jenis_kendaraan")
-    .select("id, kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik, aktif")
-    .order("kategori", { ascending: false }) // Motor first
-    .order("ukuran", { ascending: true })
-
-  if (error) {
+  let jenisKendaraan: any[] = []
+  
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik, aktif
+      FROM jenis_kendaraan
+      ORDER BY kategori DESC, ukuran ASC
+    `)
+    jenisKendaraan = rows.map(row => ({
+      ...row,
+      tarif_default: Number(row.tarif_default),
+      jatah_karyawan: Number(row.jatah_karyawan),
+      jatah_pemilik: Number(row.jatah_pemilik),
+      aktif: Boolean(row.aktif)
+    }))
+  } catch (error) {
     console.error("Fetch jenis_kendaraan error:", error)
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+    <div className="space-y-5 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out min-w-0">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Kelola Tarif</h1>
-          <p className="text-slate-500 mt-2 text-base">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Kelola Tarif</h1>
+          <p className="text-slate-500 mt-1.5 sm:mt-2 text-sm sm:text-base">
             Atur harga cuci & jatah karyawan per jenis kendaraan. Klik untuk mengedit langsung.
           </p>
         </div>
@@ -31,7 +39,7 @@ export default async function TarifPage() {
       </div>
 
       {/* Table */}
-      <TarifTable data={jenisKendaraan || []} />
+      <TarifTable data={jenisKendaraan} />
     </div>
   )
 }

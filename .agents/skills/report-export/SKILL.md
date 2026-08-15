@@ -1,38 +1,99 @@
 ---
-description: Generates PDF and Excel export of transaction reports (daily/weekly/monthly/yearly) matching the format used by the business owner. Use when building or modifying report/export features.
+description: Implements PDF and Excel exports for the Admin Dashboard, using the selected date range and the same transaction/revenue definitions shown in the dashboard. Use when building or modifying admin report export features.
 ---
 
-# Report Export Format
+# Admin Report Export
 
-## Status: BELUM LENGKAP
-File ini perlu diisi setelah dapat contoh format rekap referensi (spreadsheet
-manual yang biasa dipakai, atau screenshot/deskripsi kolom yang penting).
+## Tujuan
+Skill ini khusus untuk fitur **Export laporan Admin Dashboard**.
+Export harus merepresentasikan data yang sedang dilihat admin dan tidak membangun flow kasir.
 
-## Cara Mengisi Nanti
-1. Kalau ada file Excel/Sheets rekap manual → simpan contohnya di folder
-   `examples/` di sebelah file ini, lalu deskripsikan strukturnya di bawah
-2. Kalau tidak ada file, tulis manual kolom-kolom yang wajib ada berdasarkan
-   apa yang dibutuhkan
+## Scope
+- Export Excel
+- Export PDF
+- Filter berdasarkan periode
+- Ringkasan pendapatan
+- Detail transaksi
+- Rekap per tanggal
+- Breakdown jatah karyawan vs jatah pemilik
 
-## Template yang Perlu Diisi
+## Prinsip Utama
+Export harus konsisten dengan angka yang ditampilkan Admin Dashboard.
+Jangan sampai dashboard menampilkan satu total sementara Excel/PDF menghasilkan total berbeda karena
+logika filter atau timezone berbeda.
 
-### Kolom Wajib (isi setelah konfirmasi)
-- [ ] Tanggal
-- [ ] Jenis kendaraan
-- [ ] Harga
-- [ ] Metode pembayaran
-- [ ] Kasir yang menangani
-- [ ] (tambahkan kolom lain sesuai kebutuhan)
+## Filter
+Jika admin memilih:
+- tanggal mulai
+- tanggal akhir
 
-### Level Agregasi
-- [ ] Per transaksi (satu baris = satu transaksi), atau
-- [ ] Sudah di-summary per hari/minggu/dll
+maka export mengikuti periode tersebut.
 
-### Format Output
-- PDF: layout yang diharapkan (tabel sederhana / ada header logo usaha / dll)
-- Excel: apakah perlu formula otomatis (total, subtotal) atau data mentah saja
+Timezone bisnis: **WIB / Asia/Jakarta**.
 
-## Instruksi Implementasi (setelah kolom di atas diisi)
-Gunakan struktur kolom persis seperti didefinisikan di atas. Untuk Excel,
-sertakan baris total di akhir per periode. Untuk PDF, pastikan layout tetap
-rapi walau dicetak/dilihat di layar kecil (HP).
+## Data Detail
+Jika export membutuhkan detail transaksi, kolom dapat mencakup:
+- Tanggal
+- Waktu
+- Jenis kendaraan
+- Plat nomor
+- Kasir/user pencatat
+- Tarif total
+- Jatah karyawan
+- Jatah pemilik/bersih
+
+Gunakan nilai snapshot yang tersimpan pada transaksi.
+
+## Rekap Per Tanggal
+Untuk laporan yang bersifat summary, transaksi dengan tanggal sama dapat digabung menjadi satu
+kelompok tanggal.
+
+Contoh:
+
+```text
+Tanggal           Jumlah    Kotor       Karyawan    Pemilik
+12 Agustus 2026     18     550.000      210.000     340.000
+11 Agustus 2026     24     720.000      280.000     440.000
+```
+
+Jika format export membutuhkan detail, detail transaksi tetap boleh ditampilkan di bawah masing-masing
+kelompok tanggal.
+
+## PDF
+PDF harus:
+- mudah dibaca
+- memiliki judul laporan
+- menampilkan periode
+- menampilkan ringkasan total
+- menggunakan format Rupiah Indonesia
+- menjaga tabel tetap rapi
+- tidak memotong kolom penting
+
+Jika transaksi banyak, gunakan pagination/halaman lanjutan.
+
+## Excel
+Excel harus:
+- memiliki header yang jelas
+- memiliki data yang konsisten dengan filter dashboard
+- menggunakan format angka Rupiah/number yang sesuai
+- memiliki total/subtotal jika dibutuhkan
+- tidak memasukkan data di luar periode filter
+
+## Validasi
+Sebelum export:
+- pastikan filter tanggal valid
+- pastikan start date <= end date
+- pastikan timezone tidak menggeser tanggal
+- pastikan total export sama dengan total dashboard untuk periode yang sama
+
+## Keamanan
+Export adalah fitur admin.
+Authorization harus dilakukan server-side.
+Jangan menganggap menyembunyikan tombol export sebagai security boundary.
+
+## Yang Tidak Termasuk
+- form transaksi kasir
+- receipt kasir
+- UI kasir
+- flow input transaksi
+- optimasi POS kasir

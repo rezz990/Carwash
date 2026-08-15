@@ -132,7 +132,7 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
   if (editing) {
     return (
       <div className="flex flex-col gap-2 py-1">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Tarif</span>
             <Input
@@ -298,7 +298,7 @@ function AddKategoriModal({ onClose, onResult }: { onClose: () => void; onResult
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
         </div>
@@ -424,14 +424,14 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
         {items.map((item) => (
           <div
             key={item.id}
-            className={`flex items-center gap-4 px-6 py-4 transition-colors ${
+            className={`flex flex-wrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 transition-colors ${
               !item.aktif ? "bg-slate-50/50" : "hover:bg-slate-50/40"
             }`}
           >
             <KategoriIcon kategori={item.kategori} />
             
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5">
+            <div className="flex-1 min-w-[140px]">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <span className={`font-semibold text-sm ${!item.aktif ? "text-slate-400" : "text-slate-900"}`}>
                   {item.kategori} {item.ukuran}
                 </span>
@@ -443,7 +443,7 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
               <TarifCell item={item} onResult={showToast} />
             </div>
 
-            <div className="flex items-center gap-2 pl-4 border-l border-slate-100">
+            <div className="flex items-center gap-2 sm:pl-4 sm:border-l sm:border-slate-100">
               <ToggleSwitch
                 checked={item.aktif}
                 disabled={pendingToggles.has(item.id)}

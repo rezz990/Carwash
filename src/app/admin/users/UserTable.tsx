@@ -66,7 +66,7 @@ function AddUserModal({ onClose, onResult }: { onClose: () => void; onResult: (m
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">Tambah User Baru</h2>
         </div>
@@ -176,7 +176,7 @@ function ResetPasswordModal({ user, onClose, onResult }: { user: UserProfile; on
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">Reset Password</h2>
           <p className="text-sm text-slate-500 mt-1">untuk user <span className="font-semibold">{user.username}</span></p>
@@ -246,7 +246,7 @@ function EditUserModal({ user, onClose, onResult }: { user: UserProfile; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900">Edit Akun</h2>
         </div>
@@ -313,7 +313,7 @@ function ConfirmDeleteUserModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5">
           <div className="w-11 h-11 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
@@ -453,15 +453,33 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
             return (
               <div
                 key={userItem.id}
-                className={`flex items-center gap-4 px-6 py-4 transition-colors ${
+                className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 transition-colors ${
                   !userItem.aktif ? "bg-slate-50/50" : "hover:bg-slate-50/40"
                 }`}
               >
-                <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
-                  {(userItem.nama_lengkap || userItem.username)[0].toUpperCase()}
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
+                    {(userItem.nama_lengkap || userItem.username)[0].toUpperCase()}
+                  </div>
+
+                  <div className="flex-1 min-w-0 sm:hidden">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm text-slate-900">
+                        {userItem.username}
+                      </span>
+                      {isSelf && (
+                        <span className="text-xs text-slate-400">(Anda)</span>
+                      )}
+                      <RoleBadge role={userItem.role} />
+                      <StatusBadge aktif={userItem.aktif} />
+                    </div>
+                    {userItem.nama_lengkap && (
+                      <p className="text-xs text-slate-500 mt-0.5">{userItem.nama_lengkap}</p>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 hidden sm:block">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm text-slate-900">
                       {userItem.username}
@@ -477,7 +495,7 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
                   <select
                     value={userItem.role}
                     onChange={(e) => handleRoleChange(userItem, e.target.value)}

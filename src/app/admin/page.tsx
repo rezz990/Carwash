@@ -27,7 +27,7 @@ function StatCard({ label, value, sub, accent }: { label: string; value: string;
     slate: "text-slate-900",
   }
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5">
       <p className="text-sm text-slate-500 font-medium">{label}</p>
       <p className={`text-2xl font-bold mt-1.5 tabular-nums ${colorMap[accent || "slate"]}`}>{value}</p>
       {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
@@ -44,10 +44,10 @@ export default async function AdminDashboard() {
       : `${stats.persenPerubahan >= 0 ? "+" : ""}${stats.persenPerubahan.toFixed(0)}% vs kemarin`
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
+    <div className="space-y-5 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out min-w-0">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-2 text-lg">Selamat datang di panel admin POS Carwash.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+        <p className="text-slate-500 mt-1.5 sm:mt-2 text-base sm:text-lg">Selamat datang di panel admin POS Carwash.</p>
       </div>
 
       {stats.error && (
@@ -94,7 +94,7 @@ export default async function AdminDashboard() {
         </div>
         <div className="divide-y divide-slate-100">
           {stats.transaksiTerbaru.map((t) => (
-            <div key={t.id} className="flex items-center justify-between px-5 py-3">
+            <div key={t.id} className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
                   {t.kategori === "Motor" ? "M" : "🚗"}

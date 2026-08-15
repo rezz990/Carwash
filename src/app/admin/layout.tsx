@@ -1,30 +1,20 @@
-import { createClient } from "@/utils/supabase/server"
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { logout } from "../actions"
-import { Button } from "@/components/ui/Button"
+import { getCurrentUser } from "@/lib/authz"
+import { LogoutButton } from "@/components/LogoutButton"
 
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    redirect('/login')
+  const user = await getCurrentUser()
+
+  if (!user || user.role !== "admin") {
+    redirect("/login")
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, nama_lengkap, username")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== 'admin') {
-    redirect('/login')
-  }
+  const name = user.nama_lengkap || user.username
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
@@ -43,11 +33,11 @@ export default async function AdminLayout({
         <div className="px-6 py-5">
           <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200/60 mb-6 flex items-center gap-3 shadow-sm">
             <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md">
-              {(profile?.nama_lengkap || profile?.username || 'A')[0].toUpperCase()}
+              {(name || 'A')[0].toUpperCase()}
             </div>
             <div className="overflow-hidden flex-1">
               <p className="text-sm font-semibold text-slate-900 truncate">
-                {profile?.nama_lengkap || profile?.username}
+                {name}
               </p>
               <p className="text-xs text-slate-500 font-medium">Administrator</p>
             </div>
@@ -78,17 +68,12 @@ export default async function AdminLayout({
         </div>
         
         <div className="mt-auto p-6 border-t border-slate-100">
-          <form action={logout}>
-            <Button variant="outline" className="w-full justify-start text-slate-600 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-colors h-11" type="submit">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-              Logout
-            </Button>
-          </form>
+          <LogoutButton />
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
         {/* Decorative background blur */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none -z-10 transform translate-x-1/3 -translate-y-1/3" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-sky-500/5 rounded-full blur-3xl pointer-events-none -z-10 transform -translate-x-1/3 translate-y-1/3" />
@@ -101,14 +86,22 @@ export default async function AdminLayout({
             </div>
             <h1 className="text-md font-bold text-indigo-950">POS Admin</h1>
           </div>
-          <form action={logout}>
-            <Button variant="ghost" size="sm" type="submit" className="text-slate-600 hover:text-red-600">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-            </Button>
-          </form>
+          <LogoutButton isMobile />
         </header>
 
-        <div className="p-6 md:p-8 lg:p-10 flex-1 overflow-auto">
+        {/* Mobile navigation */}
+        <nav className="md:hidden sticky top-[65px] z-10 bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 py-2 overflow-x-auto">
+          <div className="flex items-center gap-1.5 min-w-max">
+            <Link href="/admin" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Overview</Link>
+            <Link href="/admin/tarif" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Tarif</Link>
+            <Link href="/admin/users" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">User</Link>
+            <Link href="/admin/rekap" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Rekap</Link>
+            <Link href="/admin/pengaturan" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Pengaturan</Link>
+          </div>
+        </nav>
+
+        <div className="p-4 sm:p-5 md:p-8 lg:p-10 flex-1 overflow-auto min-w-0">
+
           <div className="max-w-6xl mx-auto">
             {children}
           </div>

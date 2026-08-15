@@ -1,43 +1,29 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/utils/supabase/server"
-import { createAdminClient } from "@/utils/supabase/admin"
-
-async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) return { error: "Anda harus login" as const, user: null }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, username")
-    .eq("id", user.id)
-    .single()
-
-  if (profile?.role !== "admin") {
-    return { error: "Hanya admin yang bisa mengakses fitur ini" as const, user: null }
-  }
-
-  return { error: null, user, username: profile.username }
-}
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
+import { requireAdmin } from "@/lib/authz"
+import pool from "@/lib/db"
+import bcrypt from "bcryptjs"
+import type { RowDataPacket } from "mysql2"
+import { utcSqlToIso } from "@/lib/datetime"
 
 // ---------------------------------------------------------
 // AKUN SAYA
 // ---------------------------------------------------------
 
 export async function updateOwnProfile(namaLengkap: string) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "Anda harus login" }
+  const session = await getServerSession(authOptions)
+  const userId = (session?.user as any)?.id
+  if (!userId) return { error: "Anda harus login" }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ nama_lengkap: namaLengkap.trim() || null })
-    .eq("id", user.id)
-
-  if (error) {
+  try {
+    await pool.query(
+      "UPDATE users SET nama_lengkap = ? WHERE id = ?",
+      [namaLengkap.trim() || null, userId]
+    )
+  } catch (error) {
     console.error("Update own profile error:", error)
     return { error: "Gagal menyimpan nama" }
   }
@@ -50,31 +36,35 @@ export async function changeOwnPassword(params: {
   currentPassword: string
   newPassword: string
 }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || !user.email) return { error: "Anda harus login" }
+  const session = await getServerSession(authOptions)
+  const userId = (session?.user as any)?.id
+  if (!userId) return { error: "Anda harus login" }
 
   if (params.newPassword.length < 6) {
     return { error: "Password baru minimal 6 karakter" }
   }
 
-  // Verifikasi password lama dulu dengan cara sign-in ulang. Kalau salah,
-  // signInWithPassword bakal error dan kita tolak proses ganti password.
-  const { error: verifyError } = await supabase.auth.signInWithPassword({
-    email: user.email,
-    password: params.currentPassword,
-  })
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT password_hash FROM users WHERE id = ?",
+      [userId]
+    )
+    if (rows.length === 0) return { error: "User tidak ditemukan" }
 
-  if (verifyError) {
-    return { error: "Password lama salah" }
-  }
+    const user = rows[0]
+    const isValidPassword = await bcrypt.compare(params.currentPassword, user.password_hash)
 
-  const { error: updateError } = await supabase.auth.updateUser({
-    password: params.newPassword,
-  })
+    if (!isValidPassword) {
+      return { error: "Password lama salah" }
+    }
 
-  if (updateError) {
-    console.error("Change password error:", updateError)
+    const newPasswordHash = await bcrypt.hash(params.newPassword, 10)
+    await pool.query(
+      "UPDATE users SET password_hash = ? WHERE id = ?",
+      [newPasswordHash, userId]
+    )
+  } catch (error) {
+    console.error("Change password error:", error)
     return { error: "Gagal mengubah password" }
   }
 
@@ -86,6 +76,7 @@ export async function changeOwnPassword(params: {
 // ---------------------------------------------------------
 
 export type BackupRow = {
+  id?: string
   tanggal_waktu: string
   jenis_kendaraan_id: string
   plat_nomor: string | null
@@ -99,18 +90,27 @@ export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[];
   const { error: authError } = await requireAdmin()
   if (authError) return { data: [], error: authError }
 
-  const supabase = await createClient()
-  const { data, error } = await supabase
-    .from("transaksi")
-    .select("tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id")
-    .order("tanggal_waktu", { ascending: true })
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id
+      FROM transaksi
+      ORDER BY tanggal_waktu ASC
+    `)
 
-  if (error) {
+    const data = rows.map(r => ({
+      ...r,
+      id: r.id,
+      tanggal_waktu: utcSqlToIso(r.tanggal_waktu),
+      tarif_total: Number(r.tarif_total),
+      tarif_jatah_karyawan: Number(r.tarif_jatah_karyawan),
+      tarif_jatah_pemilik: Number(r.tarif_jatah_pemilik)
+    }))
+
+    return { data: data as BackupRow[] }
+  } catch (error) {
     console.error("Fetch backup error:", error)
     return { data: [], error: "Gagal mengambil data untuk backup" }
   }
-
-  return { data: data as BackupRow[] }
 }
 
 export async function restoreTransaksiBackup(params: {
@@ -124,7 +124,6 @@ export async function restoreTransaksiBackup(params: {
     return { error: "File backup kosong atau tidak valid" }
   }
 
-  // Validasi struktur dasar tiap baris sebelum insert
   for (const row of params.rows) {
     if (
       !row.tanggal_waktu ||
@@ -138,27 +137,49 @@ export async function restoreTransaksiBackup(params: {
     }
   }
 
-  const adminClient = createAdminClient()
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
 
-  if (params.mode === "replace") {
-    const { error: deleteError } = await adminClient.from("transaksi").delete().neq("id", "00000000-0000-0000-0000-000000000000")
-    if (deleteError) {
-      console.error("Delete before restore error:", deleteError)
-      return { error: "Gagal menghapus data lama sebelum restore" }
+    if (params.mode === "replace") {
+      await connection.query("DELETE FROM transaksi")
     }
-  }
 
-  // Insert bertahap per 500 baris, biar ga kena limit payload sekali insert
-  const CHUNK_SIZE = 500
-  for (let i = 0; i < params.rows.length; i += CHUNK_SIZE) {
-    const chunk = params.rows.slice(i, i + CHUNK_SIZE)
-    const { error: insertError } = await adminClient.from("transaksi").insert(chunk)
-    if (insertError) {
-      console.error("Restore insert error:", insertError)
-      return {
-        error: `Gagal restore di baris ke-${i}. Kemungkinan ada jenis_kendaraan_id atau kasir_id yang sudah tidak ada di database. ${params.mode === "replace" ? "PERHATIAN: data lama sudah terlanjur terhapus." : ""}`,
-      }
+    const CHUNK_SIZE = 500
+    for (let i = 0; i < params.rows.length; i += CHUNK_SIZE) {
+      const chunk = params.rows.slice(i, i + CHUNK_SIZE)
+      const values = chunk.map(row => {
+        const dateObj = new Date(row.tanggal_waktu)
+        if (Number.isNaN(dateObj.getTime())) throw new Error("Tanggal backup tidak valid")
+        const formattedDate = dateObj.toISOString().slice(0, 19).replace("T", " ")
+
+        return [
+          row.id || crypto.randomUUID(),
+          formattedDate,
+          row.jenis_kendaraan_id, 
+          row.plat_nomor, 
+          row.tarif_total, 
+          row.tarif_jatah_karyawan, 
+          row.tarif_jatah_pemilik, 
+          row.kasir_id
+        ]
+      })
+      
+      await connection.query(
+        "INSERT IGNORE INTO transaksi (id, tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id) VALUES ?",
+        [values]
+      )
     }
+
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    console.error("Restore insert error:", error)
+    return {
+      error: `Gagal restore data. Kemungkinan ada jenis_kendaraan_id atau kasir_id yang sudah tidak ada di database. ${params.mode === "replace" ? "PERHATIAN: data lama mungkin sudah terhapus." : ""}`,
+    }
+  } finally {
+    connection.release()
   }
 
   revalidatePath("/admin", "layout")
@@ -169,10 +190,9 @@ export async function resetTransaksiData() {
   const { error: authError } = await requireAdmin()
   if (authError) return { error: authError }
 
-  const adminClient = createAdminClient()
-  const { error } = await adminClient.from("transaksi").delete().neq("id", "00000000-0000-0000-0000-000000000000")
-
-  if (error) {
+  try {
+    await pool.query("DELETE FROM transaksi")
+  } catch (error) {
     console.error("Reset data error:", error)
     return { error: "Gagal menghapus data transaksi" }
   }

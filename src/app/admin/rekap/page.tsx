@@ -1,13 +1,14 @@
 import { RekapDashboard } from "./RekapDashboard"
-
-function formatDateInput(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
+import { addJakartaDays, todayJakarta } from "@/lib/datetime"
 
 export default function RekapPage() {
-  const today = new Date()
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(today.getDate() - 29) // 30 hari termasuk hari ini
+  // PENTING: jangan pakai new Date().toISOString() di sini — itu tanggal UTC,
+  // bukan tanggal WIB. Di production (server jalan di UTC), untuk transaksi
+  // yang terjadi jam 00:00-06:59 WIB, toISOString() akan mundur 1 hari dan
+  // bikin transaksi hari ini hilang dari default range rekap. Selalu pakai
+  // helper Asia/Jakarta yang sama seperti di halaman Overview.
+  const today = todayJakarta()
+  const thirtyDaysAgo = addJakartaDays(today, -29) // 30 hari termasuk hari ini
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
@@ -19,8 +20,8 @@ export default function RekapPage() {
       </div>
 
       <RekapDashboard
-        defaultDateFrom={formatDateInput(thirtyDaysAgo)}
-        defaultDateTo={formatDateInput(today)}
+        defaultDateFrom={thirtyDaysAgo}
+        defaultDateTo={today}
       />
     </div>
   )

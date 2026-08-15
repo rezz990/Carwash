@@ -1,22 +1,45 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { login } from "../actions"
+import { signIn } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
+  const [pending, setPending] = useState(false)
+  const router = useRouter()
 
-  function onSubmit(formData: FormData) {
+  async function onSubmit(formData: FormData) {
     setError(null)
-    startTransition(async () => {
-      const result = await login(formData)
-      if (result?.error) {
-        setError(result.error)
+    setPending(true)
+    
+    const username = formData.get("username") as string
+    const password = formData.get("password") as string
+
+    try {
+      const res = await signIn("credentials", {
+        username,
+        password,
+        redirect: false,
+      })
+
+      if (res?.error) {
+        if (res.error === "Akun dinonaktifkan") {
+          setError("Akun Anda telah dinonaktifkan.")
+        } else {
+          setError("Username atau password salah.")
+        }
+      } else {
+        router.push("/admin")
+        router.refresh()
       }
-    })
+    } catch (err) {
+      setError("Terjadi kesalahan sistem.")
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
