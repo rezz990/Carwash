@@ -9,6 +9,8 @@ import {
 } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { useRealtimeRekap } from "@/hooks/useRealtimeRekap";
+import { RefreshCw } from "lucide-react";
 import {
   fetchRekap,
   updateTransaksi,
@@ -803,6 +805,14 @@ export function RekapDashboard({
     });
   }, [appliedDateFrom, appliedDateTo]);
 
+  const {pendingRefresh} = useRealtimeRekap(() => {
+    loadData();
+  }, {debounceMs: 3000});
+
+  useEffect(() => {
+    loadData();
+  },[loadData])
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -1362,6 +1372,19 @@ export function RekapDashboard({
 
   return (
     <div className="space-y-6">
+      {/* Header dengan indikator realtime */}
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+          Rekap Laporan
+        </h1>
+        {pendingRefresh && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-medium border border-indigo-100 animate-pulse">
+            <RefreshCw className="w-3 h-3 animate-spin" />
+            Memperbarui...
+          </span>
+        )}
+      </div>
+
       {/* Filter Ringkasan + Export dipisahkan supaya masing-masing punya periode sendiri. */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">

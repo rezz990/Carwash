@@ -1,9 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { OverviewChart } from "./OverviewChart"
 import { FadeIn, StaggerContainer, StaggerItem } from "@/components/animation"
+import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
 import {
   DollarSign,
   ShoppingCart,
@@ -13,6 +15,7 @@ import {
   Receipt,
   UserCog,
   BarChart3,
+  RefreshCw,
 } from "lucide-react"
 
 function formatRupiah(value: number) {
@@ -153,20 +156,29 @@ function NavCard({
 
 /* ─── Main Content ────────────────────────────────────────────────────────── */
 export function DashboardContent({ stats }: { stats: Stats }) {
+    const router = useRouter()
   const perubahanLabel =
     stats.persenPerubahan === null
       ? null
       : `${stats.persenPerubahan >= 0 ? "+" : ""}${stats.persenPerubahan.toFixed(0)}% vs kemarin`
-
+  const {pendingRefresh} = useRealtimeRekap(() => {
+    router.refresh();
+  }, { debounceMs: 3000})
   return (
     <div className="space-y-5 sm:space-y-8 min-w-0">
       <FadeIn>
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="text-slate-500 mt-1.5 sm:mt-2 text-base sm:text-lg">
-            Selamat datang di panel admin POS Carwash.
-          </p>
+          {pendingRefresh && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-medium border border-indigo-100 animate-pulse">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              Memperbarui...
+            </span>
+          )}
         </div>
+        <p className="text-slate-500 mt-1.5 sm:mt-2 text-base sm:text-lg">
+          Selamat datang di panel admin POS Carwash.
+        </p>
       </FadeIn>
 
       {stats.error && (

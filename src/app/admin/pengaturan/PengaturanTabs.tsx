@@ -3,6 +3,7 @@
 import { useState, useRef, useTransition } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { useBrowserNotification } from "@/hooks/useBrowserNotification"
 import {
   updateOwnProfile,
   changeOwnPassword,
@@ -115,6 +116,77 @@ function AkunSayaTab({
             {passwordPending ? "Menyimpan..." : "Ubah Password"}
           </Button>
         </form>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------
+// TAB: NOTIFIKASI
+// ---------------------------------------------------------
+function NotifikasiTab({ onResult }: { onResult: (msg: string, type: "success" | "error") => void }) {
+  const { supported, enabled, permission, toggle } = useBrowserNotification()
+
+  async function handleToggle() {
+    await toggle()
+    if (permission === "denied") {
+      onResult("Izin notifikasi ditolak. Aktifkan manual di pengaturan browser.", "error")
+    } else if (permission === "granted" || !enabled) {
+      onResult(enabled ? "Notifikasi browser dimatikan" : "Notifikasi browser diaktifkan", "success")
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-700 mb-1">Notifikasi Browser</h3>
+            <p className="text-sm text-slate-500 max-w-md">
+              Tampilkan notifikasi native desktop/mobile saat ada transaksi baru dari kasir.
+              Notifikasi tetap muncul sebagai toast di dalam aplikasi meskipun ini dimatikan.
+            </p>
+            {!supported && (
+              <p className="text-xs text-amber-600 mt-2">Browser Anda tidak mendukung notifikasi web.</p>
+            )}
+            {supported && permission === "denied" && (
+              <p className="text-xs text-red-600 mt-2">
+                Izin notifikasi pernah ditolak. Buka pengaturan browser → Privasi & Security → Notifikasi → Izinkan situs ini.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={!supported || permission === "denied"}
+            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+              enabled ? "bg-indigo-600" : "bg-slate-200"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                enabled ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
+          <span className={`w-2 h-2 rounded-full ${enabled ? "bg-emerald-500" : "bg-slate-300"}`} />
+          Status: {enabled ? "Aktif" : "Nonaktif"}
+          {permission === "granted" && enabled && (
+            <span className="text-emerald-600 font-medium"> — Notifikasi browser akan muncul</span>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 p-6">
+        <h3 className="text-sm font-bold text-indigo-700 mb-2">Cara Kerja</h3>
+        <ul className="text-sm text-indigo-600/80 space-y-1.5 list-disc list-inside">
+          <li>Saat kasir mencatat transaksi baru, sistem akan mengirim notifikasi realtime</li>
+          <li>Toast in-app selalu muncul di pojok kanan bawah</li>
+          <li>Notifikasi browser (native) hanya muncul jika toggle di atas diaktifkan</li>
+          <li>Suara notifikasi otomatis dimainkan saat ada transaksi baru</li>
+          <li>Data tetap realtime meskipun notifikasi browser dimatikan</li>
+        </ul>
       </div>
     </div>
   )
@@ -343,14 +415,14 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
 // MAIN
 // ---------------------------------------------------------
 export function PengaturanTabs({ currentNama }: { currentNama: string }) {
-  const [activeTab, setActiveTab] = useState<"akun" | "bahaya">("akun")
+  const [activeTab, setActiveTab] = useState<"akun" | "notifikasi" | "bahaya">("akun")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const showToast = (message: string, type: "success" | "error") => setToast({ message, type })
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setActiveTab("akun")}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
@@ -358,6 +430,14 @@ export function PengaturanTabs({ currentNama }: { currentNama: string }) {
           }`}
         >
           Akun Saya
+        </button>
+        <button
+          onClick={() => setActiveTab("notifikasi")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            activeTab === "notifikasi" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+          }`}
+        >
+          Notifikasi
         </button>
         <button
           onClick={() => setActiveTab("bahaya")}
@@ -370,6 +450,7 @@ export function PengaturanTabs({ currentNama }: { currentNama: string }) {
       </div>
 
       {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} onResult={showToast} />}
+      {activeTab === "notifikasi" && <NotifikasiTab onResult={showToast} />}
       {activeTab === "bahaya" && <ZonaBahayaTab onResult={showToast} />}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
