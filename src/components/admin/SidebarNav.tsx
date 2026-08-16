@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/utils/cn"
+import { motion } from "framer-motion"
 
 interface NavItem {
   href: string
@@ -88,13 +89,21 @@ export function SidebarNav() {
             key={item.href}
             href={item.href}
             className={cn(
-              "group relative flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 overflow-hidden",
+              "group relative flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors duration-200 overflow-hidden",
               active
                 ? "bg-indigo-50 text-indigo-700 shadow-sm nav-active-pill"
                 : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/60"
             )}
           >
-            {/* Icon */}
+            {/* Active indicator dengan motion — hanya di desktop */}
+            {active && (
+              <motion.div
+                layoutId="activeNav"
+                className="absolute inset-0 bg-indigo-50 rounded-xl -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            
             <span
               className={cn(
                 "shrink-0 transition-colors duration-200",
@@ -103,13 +112,9 @@ export function SidebarNav() {
             >
               {item.icon}
             </span>
-
-            {/* Label */}
             <span className={cn(active ? "font-semibold" : "")}>
               {item.label}
             </span>
-
-            {/* Active dot badge (kanan) */}
             {active && (
               <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
             )}

@@ -146,3 +146,44 @@ textarea {
   animation: pageEnter 0.4s ease-out both;
 }
 
+/* ─── Performance: Disable animations for users who prefer reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Touch-friendly improvements ─── */
+@media (hover: none) and (pointer: coarse) {
+  /* Di touch device, hover effect tidak perlu — tap sudah cukup */
+  .hover-lift {
+    transform: none !important;
+  }
+  
+  /* Pastikan tap target minimal 44px (Apple HIG) */
+  button, 
+  [role="button"],
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ─── Smooth scroll hanya di device yang mendukung ─── */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ─── Optimize animations for low-end devices ─── */
+@media (max-width: 640px) {
+  /* Animasi lebih singkat di HP */
+  .animate-page-enter {
+    animation-duration: 0.25s;
+  }
+}
