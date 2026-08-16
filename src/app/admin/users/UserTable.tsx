@@ -4,7 +4,6 @@ import { useState, useTransition, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { createUser, resetPassword, updateUserRole, toggleAktifUser, updateUserProfile, deleteUser } from "./actions"
-import { useScrollToForm } from "@/hooks/useScrollToForm"
 
 type UserProfile = {
   id: string
@@ -37,7 +36,6 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
 
 // Modal tambah user baru
 function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const formRef = useScrollToForm<HTMLDivElement>()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [namaLengkap, setNamaLengkap] = useState("")
@@ -67,7 +65,7 @@ function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (ms
   }
 
   return (
-    <div ref={formRef} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-slate-900">Tambah User Baru</h2>
         <button
@@ -163,7 +161,6 @@ function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (ms
 
 // Modal reset password
 function ResetPasswordForm({ user, onClose, onResult }: { user: UserProfile; onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const formRef = useScrollToForm<HTMLDivElement>()
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -236,7 +233,6 @@ function ResetPasswordForm({ user, onClose, onResult }: { user: UserProfile; onC
 // Modal edit akun - ubah username & nama lengkap user yang sudah ada
 // Inline form edit akun - ubah username & nama lengkap user yang sudah ada
 function EditUserForm({ user, onClose, onResult }: { user: UserProfile; onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const formRef = useScrollToForm<HTMLDivElement>()
   const [username, setUsername] = useState(user.username)
   const [namaLengkap, setNamaLengkap] = useState(user.nama_lengkap || "")
   const [error, setError] = useState<string | null>(null)
@@ -264,7 +260,7 @@ function EditUserForm({ user, onClose, onResult }: { user: UserProfile; onClose:
   }
 
   return (
-    <div ref={formRef} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-slate-900">Edit Akun</h2>
         <button
@@ -336,9 +332,8 @@ function ConfirmDeleteUserForm({
   onConfirm: () => void
   isPending: boolean
 }) {
-  const formRef = useScrollToForm<HTMLDivElement>()
   return (
-<div ref={formRef} className="bg-white rounded-xl border border-red-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+<div className="bg-white rounded-xl border border-red-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="px-5 py-4 border-b border-red-100 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-red-700">Hapus akun {user.username}?</h2>
         <button

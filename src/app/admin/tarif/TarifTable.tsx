@@ -4,7 +4,6 @@ import { useState, useTransition, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { updateTarifDefault, toggleAktifJenisKendaraan, createJenisKendaraan } from "./actions"
-import { useScrollToForm } from "@/hooks/useScrollToForm"
 
 type JenisKendaraan = {
   id: string
@@ -246,7 +245,6 @@ function KategoriIcon({ kategori }: { kategori: string }) {
 
 // Modal tambah jenis kendaraan/kategori baru
 function AddKategoriForm({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const formRef = useScrollToForm<HTMLDivElement>()
   const [kategori, setKategori] = useState("")
   const [ukuran, setUkuran] = useState("")
   const [tarif, setTarif] = useState("")
@@ -299,7 +297,7 @@ function AddKategoriForm({ onClose, onResult }: { onClose: () => void; onResult:
   }
 
   return (
-   <div ref={formRef}  className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+   <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
         <button
