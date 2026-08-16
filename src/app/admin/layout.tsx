@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation"
-import Link from "next/link"
 import { getCurrentUser } from "@/lib/authz"
 import { LogoutButton } from "@/components/LogoutButton"
+import { NotificationCenter } from "@/components/admin/NotificationCenter"
+import { SidebarNav, MobileNav } from "@/components/admin/SidebarNav"
 
 export default async function AdminLayout({
   children,
@@ -20,6 +21,7 @@ export default async function AdminLayout({
     <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
       {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        {/* Logo */}
         <div className="p-6 border-b border-slate-100 flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center border border-indigo-500/20 text-indigo-600 shadow-sm">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.4-1.7-1-2.2l-3.3-2.5a2 2 0 0 0-1.2-.5H12M8 12h-3a1 1 0 0 0-1 1v4c0 .6.4 1 1 1h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/><path d="M12 11V3c0-.6-.4-1-1-1H3c-.6 0-1 .4-1 1v8"/><path d="M12 7H2"/></svg>
@@ -29,45 +31,28 @@ export default async function AdminLayout({
             <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Dashboard</p>
           </div>
         </div>
-        
-        <div className="px-6 py-5">
-          <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200/60 mb-6 flex items-center gap-3 shadow-sm">
-            <div className="w-9 h-9 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md">
-              {(name || 'A')[0].toUpperCase()}
+
+        {/* User card + Nav */}
+        <div className="px-4 py-5 flex-1 overflow-y-auto">
+          {/* User card */}
+          <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200/60 mb-5 flex items-center gap-3 shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center font-bold text-sm shadow-md shrink-0">
+              {(name || "A")[0].toUpperCase()}
             </div>
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-slate-900 truncate">
-                {name}
-              </p>
+              <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>
               <p className="text-xs text-slate-500 font-medium">Administrator</p>
             </div>
+            {/* Online indicator */}
+            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400/50 shrink-0" title="Online" />
           </div>
 
-          <nav className="space-y-1.5">
-            <Link href="/admin" className="group flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 transition-all font-medium text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-indigo-600 transition-colors"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-              Overview
-            </Link>
-            <Link href="/admin/tarif" className="group flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 transition-all font-medium text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-indigo-600 transition-colors"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              Kelola Tarif
-            </Link>
-            <Link href="/admin/users" className="group flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 transition-all font-medium text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-indigo-600 transition-colors"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              Kelola User
-            </Link>
-            <Link href="/admin/rekap" className="group flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 transition-all font-medium text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-indigo-600 transition-colors"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-              Rekap Laporan
-            </Link>
-            <Link href="/admin/pengaturan" className="group flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/80 transition-all font-medium text-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 group-hover:text-indigo-600 transition-colors"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              Pengaturan
-            </Link>
-          </nav>
+          {/* Navigation — client component untuk active state */}
+          <SidebarNav />
         </div>
-        
-        <div className="mt-auto p-6 border-t border-slate-100">
+
+        {/* Logout */}
+        <div className="p-4 border-t border-slate-100">
           <LogoutButton />
         </div>
       </aside>
@@ -77,7 +62,7 @@ export default async function AdminLayout({
         {/* Decorative background blur */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-500/5 rounded-full blur-3xl pointer-events-none -z-10 transform translate-x-1/3 -translate-y-1/3" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-sky-500/5 rounded-full blur-3xl pointer-events-none -z-10 transform -translate-x-1/3 translate-y-1/3" />
-        
+
         {/* Mobile Header */}
         <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4 flex items-center justify-between z-10 sticky top-0">
           <div className="flex items-center gap-2">
@@ -89,24 +74,21 @@ export default async function AdminLayout({
           <LogoutButton isMobile />
         </header>
 
-        {/* Mobile navigation */}
+        {/* Mobile navigation — client component untuk active state */}
         <nav className="md:hidden sticky top-[65px] z-10 bg-white/95 backdrop-blur-md border-b border-slate-200 px-3 py-2 overflow-x-auto">
-          <div className="flex items-center gap-1.5 min-w-max">
-            <Link href="/admin" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Overview</Link>
-            <Link href="/admin/tarif" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Tarif</Link>
-            <Link href="/admin/users" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">User</Link>
-            <Link href="/admin/rekap" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Rekap</Link>
-            <Link href="/admin/pengaturan" className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 whitespace-nowrap">Pengaturan</Link>
-          </div>
+          <MobileNav />
         </nav>
 
         <div className="p-4 sm:p-5 md:p-8 lg:p-10 flex-1 overflow-auto min-w-0">
-
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto animate-page-enter">
             {children}
           </div>
         </div>
       </main>
+
+      {/* Notifikasi realtime (toast + suara) untuk transaksi baru - dipasang
+          di sini (level layout) supaya muncul di halaman admin manapun */}
+      <NotificationCenter />
     </div>
   )
 }
