@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useRealtimeRekap } from "@/hooks/useRealtimeRekap";
+import { useScrollToForm } from "@/hooks/useScrollToForm";
 import { RefreshCw } from "lucide-react";
 import {
   fetchRekap,
@@ -233,8 +234,8 @@ function PaginationControls({
   );
 }
 
-// Modal konfirmasi hapus - selalu tampil sebelum aksi hapus dieksekusi
-function ConfirmDeleteModal({
+// Inline konfirmasi hapus - selalu tampil sebelum aksi hapus dieksekusi
+function ConfirmDeleteForm({
   transaksi,
   onCancel,
   onConfirm,
@@ -245,43 +246,38 @@ function ConfirmDeleteModal({
   onConfirm: () => void;
   isPending: boolean;
 }) {
+  const formRef = useScrollToForm<HTMLDivElement>()
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-        <div className="px-6 py-5">
-          <div className="w-11 h-11 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-red-600"
-            >
+   <div ref={formRef} className="bg-white rounded-xl border border-red-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-red-100 flex items-center justify-between gap-3">
+        <h2 className="text-base font-bold text-red-700">Hapus transaksi ini?</h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Kembali
+        </button>
+      </div>
+      <div className="px-5 py-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
               <line x1="12" x2="12" y1="9" y2="13" />
               <line x1="12" x2="12.01" y1="17" y2="17" />
             </svg>
           </div>
-          <h2 className="text-lg font-bold text-slate-900">
-            Hapus transaksi ini?
-          </h2>
-          <p className="text-sm text-slate-500 mt-2">
+          <p className="text-sm text-slate-600">
             Transaksi{" "}
             <span className="font-semibold text-slate-700">
               {transaksi.kategori} {transaksi.ukuran}
             </span>
             {transaksi.plat_nomor && (
               <>
-                {" "}
-                plat{" "}
-                <span className="font-mono font-semibold">
-                  {transaksi.plat_nomor}
-                </span>
+                {" "}plat{" "}
+                <span className="font-mono font-semibold">{transaksi.plat_nomor}</span>
               </>
             )}{" "}
             senilai{" "}
@@ -289,28 +285,14 @@ function ConfirmDeleteModal({
               {formatRupiah(transaksi.tarif_total)}
             </span>{" "}
             akan dihapus permanen. Tindakan ini{" "}
-            <span className="font-semibold text-red-600">
-              tidak bisa dibatalkan
-            </span>
-            .
+            <span className="font-semibold text-red-600">tidak bisa dibatalkan</span>.
           </p>
         </div>
-        <div className="px-6 pb-6 flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={onCancel}
-            disabled={isPending}
-          >
+         <div className="flex gap-3">
+          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isPending}>
             Batal
           </Button>
-          <Button
-            type="button"
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-            onClick={onConfirm}
-            disabled={isPending}
-          >
+           <Button type="button" className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm} disabled={isPending}>
             {isPending ? "Menghapus..." : "Ya, Hapus"}
           </Button>
         </div>
@@ -321,7 +303,7 @@ function ConfirmDeleteModal({
 
 // Modal edit transaksi - ubah jenis kendaraan & plat nomor, dengan
 // konfirmasi terpisah sebelum submit
-function EditTransaksiModal({
+function EditTransaksiForm({
   transaksi,
   jenisKendaraanList,
   onCancel,
@@ -334,6 +316,7 @@ function EditTransaksiModal({
   onSaved: () => void;
   onResult: (msg: string, type: "success" | "error") => void;
 }) {
+  const formRef = useScrollToForm<HTMLDivElement>()
   const initialJenisId =
     jenisKendaraanList.find(
       (jk) =>
@@ -366,56 +349,42 @@ function EditTransaksiModal({
 
   if (showConfirm) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-          <div className="px-6 py-5">
-            <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-amber-600"
-              >
+      <div ref={formRef} className="bg-white rounded-xl border border-amber-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+        <div className="px-5 py-4 border-b border-amber-100 flex items-center justify-between gap-3">
+          <h2 className="text-base font-bold text-amber-700">Simpan perubahan?</h2>
+          <button
+            type="button"
+            onClick={() => setShowConfirm(false)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Kembali
+          </button>
+        </div>
+        <div className="px-5 py-5">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600">
                 <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                 <line x1="12" x2="12" y1="9" y2="13" />
                 <line x1="12" x2="12.01" y1="17" y2="17" />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-slate-900">
-              Simpan perubahan?
-            </h2>
-            <p className="text-sm text-slate-500 mt-2">
+            <p className="text-sm text-slate-600">
               Tarif dan pembagian jatah karyawan/pemilik akan dihitung ulang
               otomatis sesuai jenis kendaraan yang dipilih.
             </p>
           </div>
           {error && (
-            <div className="mx-6 mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
+            <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
               {error}
             </div>
           )}
-          <div className="px-6 pb-6 flex gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowConfirm(false)}
-              disabled={isPending}
-            >
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowConfirm(false)} disabled={isPending}>
               Kembali
             </Button>
-            <Button
-              type="button"
-              className="flex-1"
-              onClick={handleSubmit}
-              disabled={isPending}
-            >
+             <Button type="button" className="flex-1" onClick={handleSubmit} disabled={isPending}>
               {isPending ? "Menyimpan..." : "Ya, Simpan"}
             </Button>
           </div>
@@ -425,58 +394,50 @@ function EditTransaksiModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-        <div className="px-6 py-5 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Edit Transaksi</h2>
+    <div ref={formRef} className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+        <h2 className="text-base font-bold text-slate-900">Edit Transaksi</h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Kembali
+        </button>
+      </div>
+      <div className="px-5 py-5 space-y-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Jenis Kendaraan</label>
+          <select
+            value={jenisId}
+            onChange={(e) => setJenisId(e.target.value)}
+            className="w-full h-11 px-3 text-sm rounded-lg border border-slate-200 bg-white"
+   >
+            {jenisKendaraanList.map((jk) => (
+              <option key={jk.id} value={jk.id}>
+                {jk.kategori} {jk.ukuran}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="px-6 py-5 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">
-              Jenis Kendaraan
-            </label>
-            <select
-              value={jenisId}
-              onChange={(e) => setJenisId(e.target.value)}
-              className="w-full h-11 px-3 text-sm rounded-lg border border-slate-200 bg-white"
-            >
-              {jenisKendaraanList.map((jk) => (
-                <option key={jk.id} value={jk.id}>
-                  {jk.kategori} {jk.ukuran}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">
-              Plat Nomor
-            </label>
-            <Input
-              value={platNomor}
-              onChange={(e) => setPlatNomor(e.target.value.toUpperCase())}
-              placeholder="Opsional"
-              className="uppercase"
-            />
-          </div>
+         <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-700">Plat Nomor</label>
+          <Input
+            value={platNomor}
+            onChange={(e) => setPlatNomor(e.target.value.toUpperCase())}
+            placeholder="Opsional"
+            className="uppercase"
+          />
         </div>
-        <div className="px-6 pb-6 flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            className="flex-1"
-            onClick={onCancel}
-          >
-            Batal
-          </Button>
-          <Button
-            type="button"
-            className="flex-1"
-            onClick={() => setShowConfirm(true)}
-            disabled={!jenisId}
-          >
-            Lanjutkan
-          </Button>
-        </div>
+      </div>
+      <div className="px-5 pb-5 flex gap-3">
+        <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
+          Batal
+        </Button>
+        <Button type="button" className="flex-1" onClick={() => setShowConfirm(true)} disabled={!jenisId}>
+          Lanjutkan
+        </Button>
       </div>
     </div>
   );
@@ -505,11 +466,14 @@ function DailyTransactionsModal({
 
     document.addEventListener("keydown", handleKeyDown);
     const previousOverflow = document.body.style.overflow;
+    const previousScrollY = window.scrollY;
     document.body.style.overflow = "hidden";
+    window.scrollTo({top: 0, behavior: "smooth"})
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      window.scrollTo({top: previousScrollY, behavior: "auto"})
     };
   }, [onClose]);
 
@@ -1656,7 +1620,7 @@ export function RekapDashboard({
       )}
 
       {/* Tabel Ringkasan Harian */}
-      {view === "harian" && (
+      {view === "harian" && !selectedTanggalKey && !deleteTarget && !editTarget && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1836,7 +1800,7 @@ export function RekapDashboard({
       )}
 
       {/* Tabel Detail Transaksi - 1 baris per tanggal */}
-      {view === "detail" && (
+      {view === "detail" && !selectedTanggalKey && !deleteTarget && !editTarget && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1940,17 +1904,108 @@ export function RekapDashboard({
       )}
 
       {selectedTanggal && (
-        <DailyTransactionsModal
-          tanggalKey={selectedTanggal.tanggalKey}
-          transactions={selectedTanggal.transactions}
-          onClose={() => setSelectedTanggalKey(null)}
-          onEdit={(transaksi) => setEditTarget(transaksi)}
-          onDelete={(transaksi) => setDeleteTarget(transaksi)}
-        />
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+          {/* Header dengan tombol kembali */}
+          <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Transaksi {formatTanggalPanjang(`${selectedTanggal.tanggalKey}T00:00:00+07:00`)}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {selectedTanggal.transactions.length} transaksi pada tanggal ini
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedTanggalKey(null)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+              Kembali
+            </button>
+          </div>
+
+          {/* Tabel transaksi */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Waktu</th>
+                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Jenis</th>
+                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Plat</th>
+                  <th className="px-4 py-3 text-left font-semibold whitespace-nowrap">Kasir</th>
+                  <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Tarif</th>
+                  <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Karyawan</th>
+                  <th className="px-4 py-3 text-right font-semibold whitespace-nowrap">Bersih</th>
+                  <th className="px-4 py-3 text-center font-semibold whitespace-nowrap">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {selectedTanggal.transactions.map((t) => (
+                  <tr key={t.id} className="hover:bg-slate-50/60">
+                    <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{formatWaktu(t.tanggal_waktu)}</td>
+                    <td className="px-4 py-2.5 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span>{t.kategori} {t.ukuran}</span>
+                        {t.edited_at && (
+                          <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">DIUBAH</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap font-mono text-xs">
+                      {t.plat_nomor === "B0000XX" ? "TANPA PLAT" : t.plat_nomor || "-"}
+                    </td>
+                    <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{t.kasir_nama || "-"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatRupiah(t.tarif_total)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{formatRupiah(t.tarif_jatah_karyawan)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-emerald-600">{formatRupiah(t.tarif_jatah_pemilik)}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setEditTarget(t)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          title="Edit transaksi"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(t)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Hapus transaksi"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1.1-.9 2-2 2H7c-1.1 0-2-.9-2-2V6"/><path d="M8 6V4c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2"/></svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {selectedTanggal.transactions.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-400">Tidak ada transaksi</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer ringkasan */}
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-xs text-slate-500">
+              <span className="font-medium text-slate-700">{selectedTanggal.transactions.length}</span> transaksi
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span>Karyawan: <strong className="text-amber-600">{formatRupiah(selectedTanggal.transactions.reduce((sum, t) => sum + t.tarif_jatah_karyawan, 0))}</strong></span>
+              <span>Bersih: <strong className="text-emerald-600">{formatRupiah(selectedTanggal.transactions.reduce((sum, t) => sum + t.tarif_jatah_pemilik, 0))}</strong></span>
+              <span>Total: <strong className="text-slate-900">{formatRupiah(selectedTanggal.transactions.reduce((sum, t) => sum + t.tarif_total, 0))}</strong></span>
+            </div>
+          </div>
+        </div>
       )}
 
       {editTarget && (
-        <EditTransaksiModal
+        <EditTransaksiForm
           transaksi={editTarget}
           jenisKendaraanList={jenisKendaraanList}
           onCancel={() => setEditTarget(null)}
@@ -1963,7 +2018,7 @@ export function RekapDashboard({
       )}
 
       {deleteTarget && (
-        <ConfirmDeleteModal
+        <ConfirmDeleteForm
           transaksi={deleteTarget}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={handleDeleteConfirm}

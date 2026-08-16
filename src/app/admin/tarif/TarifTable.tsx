@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { updateTarifDefault, toggleAktifJenisKendaraan, createJenisKendaraan } from "./actions"
+import { useScrollToForm } from "@/hooks/useScrollToForm"
 
 type JenisKendaraan = {
   id: string
@@ -244,7 +245,8 @@ function KategoriIcon({ kategori }: { kategori: string }) {
 }
 
 // Modal tambah jenis kendaraan/kategori baru
-function AddKategoriModal({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
+function AddKategoriForm({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
+  const formRef = useScrollToForm<HTMLDivElement>()
   const [kategori, setKategori] = useState("")
   const [ukuran, setUkuran] = useState("")
   const [tarif, setTarif] = useState("")
@@ -297,85 +299,91 @@ function AddKategoriModal({ onClose, onResult }: { onClose: () => void; onResult
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-        <div className="px-6 py-5 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
+   <div ref={formRef}  className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+        <h2 className="text-base font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          Kembali
+        </button>
+      </div>
+
+        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
+        {error && (
+          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
+            {error}
+          </div>
+        )}
+
+          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Kategori</label>
+            <Input
+              value={kategori}
+              onChange={(e) => setKategori(e.target.value)}
+              placeholder="misal: Truk"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Ukuran</label>
+            <Input
+              value={ukuran}
+              onChange={(e) => setUkuran(e.target.value)}
+              placeholder="misal: Sedang"
+              required
+            />
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 -mt-2">
+          Kategori boleh yang sudah ada (misal &quot;Motor&quot;) untuk nambah ukuran baru, atau kategori benar-benar baru.
+        </p>
+
+          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Tarif</label>
+            <Input
+              type="number"
+              min="0"
+              step="1000"
+              value={tarif}
+              onChange={(e) => setTarif(e.target.value)}
+              placeholder="0"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-700">Jatah Karyawan</label>
+            <Input
+              type="number"
+              min="0"
+              step="1000"
+              value={jatahKaryawan}
+              onChange={(e) => setJatahKaryawan(e.target.value)}
+              placeholder="0"
+              required
+            />
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Kategori</label>
-              <Input
-                value={kategori}
-                onChange={(e) => setKategori(e.target.value)}
-                placeholder="misal: Truk"
-                required
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Ukuran</label>
-              <Input
-                value={ukuran}
-                onChange={(e) => setUkuran(e.target.value)}
-                placeholder="misal: Sedang"
-                required
-              />
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 -mt-2">
-            Kategori boleh yang sudah ada (misal &quot;Motor&quot;) untuk nambah ukuran baru, atau kategori benar-benar baru.
-          </p>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Tarif</label>
-              <Input
-                type="number"
-                min="0"
-                step="1000"
-                value={tarif}
-                onChange={(e) => setTarif(e.target.value)}
-                placeholder="0"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Jatah Karyawan</label>
-              <Input
-                type="number"
-                min="0"
-                step="1000"
-                value={jatahKaryawan}
-                onChange={(e) => setJatahKaryawan(e.target.value)}
-                placeholder="0"
-                required
-              />
-            </div>
-          </div>
-
           <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-            Jatah pemilik (otomatis): <span className="font-semibold text-slate-700">{formatRupiah(jatahPemilikPreview)}</span>
-          </p>
+          Jatah pemilik (otomatis): <span className="font-semibold text-slate-700">{formatRupiah(jatahPemilikPreview)}</span>
+        </p>
 
           <div className="flex gap-3 pt-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-              Batal
-            </Button>
-            <Button type="submit" className="flex-1" disabled={isPending}>
-              {isPending ? "Menyimpan..." : "Simpan"}
-            </Button>
-          </div>
-        </form>
-      </div>
+          <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
+            Batal
+          </Button>
+          <Button type="submit" className="flex-1" disabled={isPending}>
+            {isPending ? "Menyimpan..." : "Simpan"}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }
@@ -416,7 +424,7 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
   const kategoriList = Array.from(new Set(data.map((d) => d.kategori)))
 
   const renderGroup = (title: string, items: JenisKendaraan[]) => (
-    <div key={title} className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
+    <div key={title} className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 px-6 py-3.5 border-b border-slate-200/60">
         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
       </div>
@@ -463,22 +471,25 @@ export function TarifTable({ data }: { data: JenisKendaraan[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
-        <Button onClick={() => setShowAddModal(true)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          Tambah Jenis Kendaraan
-        </Button>
-      </div>
-
-      {kategoriList.map((kategori) =>
-        renderGroup(kategori, data.filter((d) => d.kategori === kategori))
+      {!showAddModal && (
+        <div className="flex justify-end">
+          <Button onClick={() => setShowAddModal(true)}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+            Tambah Jenis Kendaraan
+          </Button>
+        </div>
       )}
 
       {showAddModal && (
-        <AddKategoriModal
+        <AddKategoriForm
           onClose={() => setShowAddModal(false)}
           onResult={showToast}
         />
+      )}
+
+       {/* Tabel - disembunyikan saat form aktif */}
+      {!showAddModal && kategoriList.map((kategori) =>
+        renderGroup(kategori, data.filter((d) => d.kategori === kategori))
       )}
 
       {toast && (
