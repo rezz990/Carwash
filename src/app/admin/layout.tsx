@@ -1,21 +1,21 @@
-import { redirect } from "next/navigation"
-import { getCurrentUser } from "@/lib/authz"
-import { LogoutButton } from "@/components/LogoutButton"
-import { NotificationCenter } from "@/components/admin/NotificationCenter"
-import { SidebarNav, MobileNav } from "@/components/admin/SidebarNav"
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/authz";
+import { LogoutButton } from "@/components/LogoutButton";
+import { NotificationCenter } from "@/components/admin/NotificationCenter";
+import { SidebarNav, MobileNav } from "@/components/admin/SidebarNav";
 
 export default async function AdminLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const user = await getCurrentUser()
+  const user = await getCurrentUser();
 
   if (!user || user.role !== "admin") {
-    redirect("/login")
+    redirect("/login");
   }
 
-  const name = user.nama_lengkap || user.username
+  const name = user.nama_lengkap || user.username;
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100">
@@ -24,11 +24,33 @@ export default async function AdminLayout({
         {/* Logo */}
         <div className="p-6 border-b border-slate-100 flex items-center gap-3">
           <div className="w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center border border-indigo-500/20 text-indigo-600 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.4-1.7-1-2.2l-3.3-2.5a2 2 0 0 0-1.2-.5H12M8 12h-3a1 1 0 0 0-1 1v4c0 .6.4 1 1 1h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/><path d="M12 11V3c0-.6-.4-1-1-1H3c-.6 0-1 .4-1 1v8"/><path d="M12 7H2"/></svg>
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 32 32"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect width="32" height="32" rx="8" fill="#FACC15" />
+              <text
+                x="16"
+                y="22"
+                textAnchor="middle"
+                fontFamily="Arial, sans-serif"
+                fontWeight="700"
+                fontSize="18"
+                fill="#000000"
+              >
+                B
+              </text>
+            </svg>
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-indigo-950">POS Admin</h2>
-            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Dashboard</p>
+            <h2 className="text-lg font-bold tracking-tight text-indigo-950">
+              Bujon
+            </h2>
+            <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
+              Dashboard
+            </p>
           </div>
         </div>
 
@@ -40,11 +62,18 @@ export default async function AdminLayout({
               {(name || "A")[0].toUpperCase()}
             </div>
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-slate-900 truncate">{name}</p>
-              <p className="text-xs text-slate-500 font-medium">Administrator</p>
+              <p className="text-sm font-semibold text-slate-900 truncate">
+                {name}
+              </p>
+              <p className="text-xs text-slate-500 font-medium">
+                Administrator
+              </p>
             </div>
             {/* Online indicator */}
-            <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400/50 shrink-0" title="Online" />
+            <div
+              className="w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-400/50 shrink-0"
+              title="Online"
+            />
           </div>
 
           {/* Navigation — client component untuk active state */}
@@ -67,9 +96,27 @@ export default async function AdminLayout({
         <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4 flex items-center justify-between z-10 sticky top-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-indigo-500/10 rounded-lg flex items-center justify-center text-indigo-600">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.4-1.7-1-2.2l-3.3-2.5a2 2 0 0 0-1.2-.5H12M8 12h-3a1 1 0 0 0-1 1v4c0 .6.4 1 1 1h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/><path d="M12 11V3c0-.6-.4-1-1-1H3c-.6 0-1 .4-1 1v8"/><path d="M12 7H2"/></svg>
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <rect width="32" height="32" rx="8" fill="#FACC15" />
+                <text
+                  x="16"
+                  y="22"
+                  textAnchor="middle"
+                  fontFamily="Arial, sans-serif"
+                  fontWeight="700"
+                  fontSize="18"
+                  fill="#000000"
+                >
+                  B
+                </text>
+              </svg>
             </div>
-            <h1 className="text-md font-bold text-indigo-950">POS Admin</h1>
+            <h1 className="text-md font-bold text-indigo-950">Bujon</h1>
           </div>
           <LogoutButton isMobile />
         </header>
@@ -80,9 +127,7 @@ export default async function AdminLayout({
         </nav>
 
         <div className="p-4 sm:p-5 md:p-8 lg:p-10 flex-1 overflow-auto min-w-0">
-          <div className="max-w-6xl mx-auto animate-page-enter">
-            {children}
-          </div>
+          <div className="max-w-6xl mx-auto animate-page-enter">{children}</div>
         </div>
       </main>
 
@@ -90,5 +135,5 @@ export default async function AdminLayout({
           di sini (level layout) supaya muncul di halaman admin manapun */}
       <NotificationCenter />
     </div>
-  )
+  );
 }

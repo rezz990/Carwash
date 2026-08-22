@@ -1,9 +1,11 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { Dancing_Script } from "next/font/google"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { LoginForm } from "./LoginForm"
-import { Car } from "lucide-react"
+
+const dancingScript = Dancing_Script({ subsets: ["latin"], weight: ["700"] })
 
 export default function LoginPage() {
   return (
@@ -37,16 +39,16 @@ export default function LoginPage() {
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.2 }}
-              className="w-14 h-14 sm:w-16 sm:h-16 bg-indigo-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-indigo-500/30 shadow-inner"
+              className="w-14 h-14 sm:w-16 sm:h-16 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"
             >
-              <Car className="w-7 h-7 text-indigo-400" />
+              <span className="text-2xl sm:text-3xl font-bold text-black">B</span>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <CardTitle className="text-2xl sm:text-3xl font-bold tracking-tight text-white">POS Carwash</CardTitle>
+              <CardTitle className={`${dancingScript.className} text-4xl sm:text-5xl tracking-tight text-white`}>Bujon</CardTitle>
             </motion.div>
           </CardHeader>
           <CardContent className="pb-6 sm:pb-8">

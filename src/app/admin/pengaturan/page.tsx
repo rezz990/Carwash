@@ -9,15 +9,17 @@ export default async function PengaturanPage() {
   const userId = (session?.user as any)?.id
 
   let namaLengkap = ""
+  let username = ""
 
   if (userId) {
     try {
       const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT nama_lengkap FROM users WHERE id = ?",
+        "SELECT nama_lengkap, username FROM users WHERE id = ?",
         [userId]
       )
       if (rows.length > 0) {
         namaLengkap = rows[0].nama_lengkap
+        username = rows[0].username
       }
     } catch (error) {
       console.error("Fetch profile error:", error)
@@ -33,7 +35,7 @@ export default async function PengaturanPage() {
         </p>
       </div>
 
-      <PengaturanTabs currentNama={namaLengkap} />
+      <PengaturanTabs currentNama={namaLengkap} currentUsername={username}/>
     </div>
   )
 }

@@ -32,6 +32,28 @@ export async function updateOwnProfile(namaLengkap: string) {
   return { success: true }
 }
 
+export async function updateOwnUsername(username: string) {
+  const session = await getServerSession(authOptions)
+  const userId = (session?.user as any)?.id
+  if (!userId) return { error: "Sesi tidak valid" }
+
+  const clean = username.trim().toLowerCase()
+  if (!/^[a-z0-9_]{3,20}$/.test(clean)) {
+    return { error: "Username 3-20 karakter, hanya huruf kecil, angka, dan underscore" }
+  }
+
+  // pastikan tidak dipakai user lain
+  const [existing] = await pool.query<RowDataPacket[]>(
+    "SELECT id FROM users WHERE username = ? AND id != ?",
+    [clean, userId]
+  )
+  if (existing.length > 0) return { error: "Username sudah dipakai user lain" }
+
+  await pool.query("UPDATE users SET username = ? WHERE id = ?", [clean, userId])
+  revalidatePath("/pengaturan") // sesuaikan dengan route halaman ini
+  return { success: true }
+}
+
 export async function changeOwnPassword(params: {
   currentPassword: string
   newPassword: string

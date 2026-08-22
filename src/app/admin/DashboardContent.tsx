@@ -266,7 +266,9 @@ export function DashboardContent({ stats }: { stats: Stats }) {
                       {t.kategori} {t.ukuran}
                     </p>
                     <p className="text-xs text-slate-400">
-                      {t.plat_nomor || "-"} · {formatWaktu(t.tanggal_waktu)}
+                      {t.plat_nomor === "B0000XX"
+                      ? "TANPA PLAT"
+                      : t.plat_nomor || "-"} · {formatWaktu(t.tanggal_waktu)}
                     </p>
                   </div>
                 </div>

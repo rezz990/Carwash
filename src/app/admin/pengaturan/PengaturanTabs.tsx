@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/Input"
 import { useBrowserNotification } from "@/hooks/useBrowserNotification"
 import {
   updateOwnProfile,
+  updateOwnUsername,
   changeOwnPassword,
   fetchAllTransaksiForBackup,
   restoreTransaksiBackup,
@@ -35,13 +36,18 @@ function Toast({ message, type, onClose }: { message: string; type: "success" | 
 // ---------------------------------------------------------
 function AkunSayaTab({
   currentNama,
+  currentUsername,
   onResult,
 }: {
   currentNama: string
+  currentUsername: string
   onResult: (msg: string, type: "success" | "error") => void
 }) {
   const [namaLengkap, setNamaLengkap] = useState(currentNama)
   const [namaPending, startNamaTransition] = useTransition()
+
+  const [username, setUsername] = useState(currentUsername)
+  const [usernamePending, startUsernameTransition] = useTransition() // baru
 
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -55,6 +61,15 @@ function AkunSayaTab({
       const result = await updateOwnProfile(namaLengkap)
       if (result.error) onResult(result.error, "error")
       else onResult("Nama berhasil diperbarui", "success")
+    })
+  }
+
+    function handleSaveUsername(e: React.FormEvent) {
+    e.preventDefault()
+    startUsernameTransition(async () => {
+      const result = await updateOwnUsername(username)
+      if (result.error) onResult(result.error, "error")
+      else onResult("Username berhasil diperbarui", "success")
     })
   }
 
@@ -93,6 +108,23 @@ function AkunSayaTab({
           </Button>
         </form>
       </div>
+
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
+  <h3 className="text-sm font-bold text-slate-700 mb-4">Username</h3>
+  <form onSubmit={handleSaveUsername} className="flex gap-3 items-end max-w-md">
+    <div className="flex-1 space-y-1.5">
+      <Input
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        placeholder="Username untuk login"
+        autoComplete="username"
+      />
+    </div>
+    <Button type="submit" disabled={usernamePending}>
+      {usernamePending ? "Menyimpan..." : "Simpan"}
+    </Button>
+  </form>
+</div>
 
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-700 mb-4">Ubah Password</h3>
@@ -414,7 +446,7 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
 // ---------------------------------------------------------
 // MAIN
 // ---------------------------------------------------------
-export function PengaturanTabs({ currentNama }: { currentNama: string }) {
+export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: string, currentUsername: string }) {
   const [activeTab, setActiveTab] = useState<"akun" | "notifikasi" | "bahaya">("akun")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
@@ -449,7 +481,7 @@ export function PengaturanTabs({ currentNama }: { currentNama: string }) {
         </button>
       </div>
 
-      {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} onResult={showToast} />}
+      {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} currentUsername={currentUsername} onResult={showToast} />}
       {activeTab === "notifikasi" && <NotifikasiTab onResult={showToast} />}
       {activeTab === "bahaya" && <ZonaBahayaTab onResult={showToast} />}
 

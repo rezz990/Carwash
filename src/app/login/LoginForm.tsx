@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useToast } from "@/components/toast/ToastProvider"
-import { Loader2, LogIn, Eye, EyeOff } from "lucide-react"
+import { Loader2, LogIn, Eye, EyeOff, User, Lock } from "lucide-react"
 
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
@@ -73,31 +73,35 @@ export function LoginForm() {
       
       <div className="space-y-2">
         <label className="text-sm font-medium leading-none text-slate-300">Username</label>
-        <Input 
-          id="username" 
-          name="username" 
-          type="text" 
-          required 
-          className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-all"
-          placeholder="admin" 
-        />
+        <div className="relative">
+          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Input 
+            id="username" 
+            name="username" 
+            type="text" 
+            required 
+            className="h-12 bg-white/[0.04] border-white/15 text-white placeholder:text-slate-500 pl-10 rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0 focus-visible:border-indigo-500/50 hover:border-white/25 transition-all"
+            placeholder="Masukkan username" 
+          />
+        </div>
       </div>
       
       <div className="space-y-2">
         <label className="text-sm font-medium leading-none text-slate-300">Password</label>
         <div className="relative">
+          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <Input 
             id="password" 
             name="password" 
             type={showPassword ? "text" : "password"}
             required 
-            className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-all pr-10"
-            placeholder="••••••••" 
+            className="h-12 bg-white/[0.04] border-white/15 text-white placeholder:text-slate-500 pl-10 pr-11 rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0 focus-visible:border-indigo-500/50 hover:border-white/25 transition-all"
+            placeholder="Masukkan password" 
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>

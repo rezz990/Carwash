@@ -461,8 +461,24 @@ function DailyTransactionsModal({
               {transactions.map((t) => (
                 <tr key={t.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{formatWaktu(t.tanggal_waktu)}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap">{t.kategori} {t.ukuran}</td>
-                  <td className="px-4 py-2.5 whitespace-nowrap font-mono text-xs">{t.plat_nomor || "-"}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span>
+                        {t.kategori} {t.ukuran}
+                      </span>
+
+                      {t.edited_at && (
+                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          DIUBAH
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap font-mono text-xs">
+                    {t.plat_nomor === "B0000XX"
+                      ? "TANPA PLAT"
+                      : t.plat_nomor || "-"}
+                  </td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-slate-500">{t.kasir_nama || "-"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{formatRupiah(t.tarif_total)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-amber-600">{formatRupiah(t.tarif_jatah_karyawan)}</td>
