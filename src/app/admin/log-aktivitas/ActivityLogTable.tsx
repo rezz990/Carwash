@@ -10,6 +10,7 @@ import {
 } from "./actions"
 import { todayWib, addWibDays } from "@/lib/formatters"
 import { BUSINESS_TIMEZONE } from "@/lib/datetime"
+import { parseUserAgent } from "@/lib/userAgent"
 
 const ACTION_OPTIONS = [
   { value: "all", label: "Semua aksi" },
@@ -56,6 +57,8 @@ function formatWaktuLengkap(iso: string) {
 }
 
 function DetailModal({ row, onClose }: { row: ActivityLogRow; onClose: () => void }) {
+  const userAgentInfo = parseUserAgent(row.user_agent)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
@@ -99,10 +102,32 @@ function DetailModal({ row, onClose }: { row: ActivityLogRow; onClose: () => voi
               <p className="text-slate-500 text-xs mb-1">IP Address</p>
               <p className="text-slate-900">{row.ip_address ?? "-"}</p>
             </div>
-            <div className="col-span-2">
-              <p className="text-slate-500 text-xs mb-1">User Agent</p>
-              <p className="text-slate-700 text-xs break-all">{row.user_agent ?? "-"}</p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100">
+            <p className="text-slate-700 text-xs mb-2 font-semibold">Informasi Perangkat</p>
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+              <div>
+                <p className="text-slate-500 text-xs mb-1">Tipe perangkat</p>
+                <p className="text-slate-900">{userAgentInfo.deviceType}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs mb-1">Perangkat</p>
+                <p className="text-slate-900">{userAgentInfo.device}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs mb-1">Sistem operasi</p>
+                <p className="text-slate-900">{userAgentInfo.operatingSystem}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs mb-1">Browser / aplikasi</p>
+                <p className="text-slate-900">{userAgentInfo.browser}</p>
+              </div>
             </div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-medium text-slate-500 hover:text-slate-700">Lihat User Agent asli</summary>
+              <p className="mt-2 rounded-lg bg-slate-100 p-3 text-[11px] text-slate-600 break-all">{row.user_agent ?? "Tidak tersedia"}</p>
+            </details>
           </div>
 
           {(row.old_value != null || row.new_value != null) && (
