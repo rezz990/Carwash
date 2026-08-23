@@ -176,9 +176,6 @@ export function DashboardContent({ stats }: { stats: Stats }) {
             </span>
           )}
         </div>
-        <p className="text-slate-500 mt-1.5 sm:mt-2 text-base sm:text-lg">
-          Selamat datang di panel admin POS Carwash.
-        </p>
       </FadeIn>
 
       {stats.error && (
