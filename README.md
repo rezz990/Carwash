@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Activity log retention
+
+Timestamp log aktivitas disimpan sebagai UTC dan ditampilkan dalam timezone bisnis
+`Asia/Jakarta` (WIB). Log yang lebih lama dari 90 hari dibersihkan otomatis saat
+aktivitas baru dicatat. Durasi retensi dapat diubah dengan environment variable
+`ACTIVITY_LOG_RETENTION_DAYS` (bilangan bulat antara 1 dan 3650).
+
 ## Getting Started
 
 First, run the development server:

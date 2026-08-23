@@ -3,7 +3,7 @@
 import pool from "@/lib/db"
 import type { RowDataPacket } from "mysql2"
 import { requireAdmin } from "@/lib/authz"
-import { utcSqlToIso } from "@/lib/datetime"
+import { jakartaDateToUtcSql, utcSqlToIso } from "@/lib/datetime"
 import type { ActivityAction, ActivityEntityType } from "@/lib/activityLog"
 
 export type ActivityLogRow = {
@@ -24,7 +24,6 @@ export type ActivityLogRow = {
 
 export type ActivityLogFilters = {
   page?: number
-  pageSize?: number
   dateFrom?: string // YYYY-MM-DD (Jakarta)
   dateTo?: string // YYYY-MM-DD (Jakarta)
   action?: ActivityAction | "all"
@@ -41,11 +40,7 @@ export type ActivityLogResult = {
   error?: string
 }
 
-function jakartaDateToUtcSql(date: string, endOfDay = false): string {
-  const suffix = endOfDay ? "23:59:59" : "00:00:00"
-  const utc = new Date(`${date}T${suffix}+07:00`)
-  return utc.toISOString().slice(0, 19).replace("T", " ")
-}
+const ACTIVITY_LOG_PAGE_SIZE = 50
 
 function parseJsonSafe(value: unknown): unknown {
   if (value == null) return null
@@ -60,11 +55,11 @@ function parseJsonSafe(value: unknown): unknown {
 export async function fetchActivityLogs(filters: ActivityLogFilters): Promise<ActivityLogResult> {
   const { error: authError } = await requireAdmin()
   if (authError) {
-    return { data: [], total: 0, page: 1, pageSize: 20, error: authError }
+    return { data: [], total: 0, page: 1, pageSize: ACTIVITY_LOG_PAGE_SIZE, error: authError }
   }
 
   const page = Math.max(1, filters.page ?? 1)
-  const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20))
+  const pageSize = ACTIVITY_LOG_PAGE_SIZE
   const offset = (page - 1) * pageSize
 
   const where: string[] = []
