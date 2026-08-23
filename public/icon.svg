@@ -1,0 +1,26 @@
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn("shrink-0", className)}
+      aria-label="Bujon Logo"
+    >
+      {/* Background kuning rounded */}
+      <rect width="32" height="32" rx="8" fill="#FACC15" />
+      
+      {/* Huruf B - pakai font stack sistem biar konsisten */}
+      <text
+        x="11.5"
+        y="22.5"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif"
+        fontWeight="700"
+        fontSize="18"
+        fill="#0F172A"
+      >
+        B
+      </text>
+    </svg>

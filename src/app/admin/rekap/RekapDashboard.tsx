@@ -102,7 +102,7 @@ function startOfMonthWib(dateStr: string): string {
 
 function SummaryCard({ label, value, accent }: { label: string; value: string; accent?: "indigo" | "emerald" | "slate" }) {
   const colorMap = {
-    indigo: "text-indigo-600",
+    indigo: "text-yellow-600",
     emerald: "text-emerald-600",
     slate: "text-slate-900",
   }
@@ -488,7 +488,7 @@ function DailyTransactionsModal({
                       <button
                         type="button"
                         onClick={() => onEdit(t)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
                         title="Edit transaksi"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1046,27 +1046,27 @@ export function RekapDashboard({
               <h2 className="text-sm font-bold text-slate-900">Filter Ringkasan</h2>
               <p className="text-xs text-slate-500 mt-0.5">Mengatur kartu statistik, Ringkasan Harian, dan Detail Transaksi.</p>
             </div>
-            <span className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full whitespace-nowrap">WIB</span>
+            <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-full whitespace-nowrap">WIB</span>
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             <button
               type="button"
               onClick={() => applyPreset("hari-ini")}
-              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-yellow-300 hover:text-yellow-700 hover:bg-yellow-50 transition-colors"
             >
               Hari Ini
             </button>
             <button
               type="button"
               onClick={() => applyPreset("minggu-ini")}
-              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-yellow-300 hover:text-yellow-700 hover:bg-yellow-50 transition-colors"
             >
               Minggu Ini
             </button>
             <button
               type="button"
               onClick={() => applyPreset("bulan-ini")}
-              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+              className="text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-yellow-300 hover:text-yellow-700 hover:bg-yellow-50 transition-colors"
             >
               Bulan Ini
             </button>
@@ -1117,7 +1117,7 @@ export function RekapDashboard({
           </div>
           <div className="flex items-center justify-between gap-3 mt-3">
             <p className="text-[11px] text-slate-400">Pilih periode khusus file yang akan diunduh.</p>
-            <button type="button" onClick={handleResetExportFilter} className="text-[11px] font-medium text-indigo-600 hover:text-indigo-700">Reset</button>
+            <button type="button" onClick={handleResetExportFilter} className="text-[11px] font-medium text-yellow-600 hover:text-yellow-700">Reset</button>
           </div>
         </div>
       </div>
@@ -1140,7 +1140,7 @@ export function RekapDashboard({
           <button
             onClick={() => setView("harian")}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              view === "harian" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+              view === "harian" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
             }`}
           >
             Ringkasan Harian
@@ -1148,7 +1148,7 @@ export function RekapDashboard({
           <button
             onClick={() => setView("detail")}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              view === "detail" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+              view === "detail" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
             }`}
           >
             Detail Transaksi
@@ -1302,7 +1302,7 @@ export function RekapDashboard({
                     <button
                       type="button"
                       onClick={() => setSelectedTanggalKey(group.tanggalKey)}
-                      className="text-left font-semibold text-slate-900 hover:text-indigo-600 transition-colors"
+                      className="text-left font-semibold text-slate-900 hover:text-yellow-600 transition-colors"
                       title="Lihat semua transaksi pada tanggal ini"
                     >
                       {formatTanggalPanjang(`${group.tanggalKey}T00:00:00+07:00`)}
@@ -1324,7 +1324,7 @@ export function RekapDashboard({
                     <button
                       type="button"
                       onClick={() => setSelectedTanggalKey(group.tanggalKey)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-yellow-600 bg-yellow-50 hover:bg-yellow-100 transition-colors"
                     >
                       Lihat transaksi
                       <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

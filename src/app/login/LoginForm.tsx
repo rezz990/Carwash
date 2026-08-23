@@ -72,30 +72,30 @@ export function LoginForm() {
       </AnimatePresence>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium leading-none text-slate-300">Username</label>
+        <label className="text-sm font-medium leading-none text-slate-700">Username</label>
         <div className="relative">
-          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
             id="username" 
             name="username" 
             type="text" 
             required 
-            className="h-12 bg-white/[0.04] border-white/15 text-white placeholder:text-slate-500 pl-10 rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0 focus-visible:border-indigo-500/50 hover:border-white/25 transition-all"
+            className="h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pl-10 rounded-xl focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-0 focus-visible:border-yellow-400 hover:border-slate-300 transition-all"
             placeholder="Masukkan username" 
           />
         </div>
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium leading-none text-slate-300">Password</label>
+        <label className="text-sm font-medium leading-none text-slate-700">Password</label>
         <div className="relative">
-          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input 
             id="password" 
             name="password" 
             type={showPassword ? "text" : "password"}
             required 
-            className="h-12 bg-white/[0.04] border-white/15 text-white placeholder:text-slate-500 pl-10 pr-11 rounded-xl focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0 focus-visible:border-indigo-500/50 hover:border-white/25 transition-all"
+            className="h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pl-10 pr-11 rounded-xl focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-0 focus-visible:border-yellow-400 hover:border-slate-300 transition-all"
             placeholder="Masukkan password" 
           />
           <button
@@ -109,7 +109,7 @@ export function LoginForm() {
       </div>
       
       <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-        <Button disabled={pending} type="submit" className="w-full h-12 text-base font-semibold bg-indigo-500 hover:bg-indigo-600 shadow-lg shadow-indigo-500/25 border-0 text-white">
+        <Button disabled={pending} type="submit" className="w-full h-12 text-base font-semibold bg-yellow-400 hover:bg-yellow-500 shadow-sm shadow-yellow-500/20 border-0 text-slate-900">
           {pending ? (
             <span className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />

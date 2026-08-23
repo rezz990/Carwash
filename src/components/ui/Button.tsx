@@ -16,12 +16,12 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           "inline-flex items-center justify-center rounded-xl text-sm font-medium",
           "transition-all duration-200 ease-out",
-          "active:scale-[0.98] active:transition-transform active:duration-100",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500",
+          "hover:scale-[1.02] active:scale-[0.98] active:transition-transform active:duration-100",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2",
           "disabled:pointer-events-none disabled:opacity-50",
           "touch-manipulation",
           {
-            "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/20 hover:shadow-lg hover:shadow-indigo-500/30": variant === "default",
+            "bg-yellow-400 text-slate-900 hover:bg-yellow-500 shadow-sm shadow-yellow-500/20 hover:shadow-md hover:shadow-yellow-500/30": variant === "default",
             "border border-slate-200 bg-white hover:bg-slate-100 text-slate-900 hover:border-slate-300": variant === "outline",
             "hover:bg-slate-100 hover:text-slate-900 text-slate-600": variant === "ghost",
             "bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-500/20": variant === "destructive",

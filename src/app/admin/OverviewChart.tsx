@@ -94,7 +94,7 @@ export function OverviewChart() {
             <button
               onClick={() => setMode("harian")}
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                mode === "harian" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                mode === "harian" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 hover:bg-slate-50"
               }`}
             >
               Per Hari
@@ -102,7 +102,7 @@ export function OverviewChart() {
             <button
               onClick={() => setMode("bulanan")}
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                mode === "bulanan" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                mode === "bulanan" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 hover:bg-slate-50"
               }`}
             >
               Per Bulan (1 Tahun)
@@ -110,7 +110,7 @@ export function OverviewChart() {
             <button
               onClick={() => setMode("rentang")}
               className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                mode === "rentang" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                mode === "rentang" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 hover:bg-slate-50"
               }`}
             >
               Rentang Bebas
@@ -212,7 +212,7 @@ export function OverviewChart() {
           <YAxis tick={{ fontSize: 11 }} tickFormatter={formatRupiahSingkat} />
           <Tooltip formatter={(value) => formatRupiah(Number(value ?? 0))} />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Line type="monotone" dataKey="pendapatanKotor" name="Pendapatan Kotor" stroke="#6366f1" strokeWidth={2} dot={showDots} />
+          <Line type="monotone" dataKey="pendapatanKotor" name="Pendapatan Kotor" stroke="#eab308" strokeWidth={2} dot={showDots} />
           <Line type="monotone" dataKey="pendapatanBersih" name="Pendapatan Bersih" stroke="#10b981" strokeWidth={2} dot={showDots} />
         </LineChart>
       </ResponsiveContainer>

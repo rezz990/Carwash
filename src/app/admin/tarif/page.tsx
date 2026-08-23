@@ -32,9 +32,9 @@ export default async function TarifPage() {
             Atur harga cuci & jatah karyawan per jenis kendaraan. Klik untuk mengedit langsung.
           </p>
         </div>
-        <div className="shrink-0 hidden sm:flex items-center gap-2 bg-indigo-50/80 border border-indigo-200/60 rounded-xl px-4 py-2.5">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-500"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-          <span className="text-xs font-medium text-indigo-700">Klik angka untuk edit</span>
+        <div className="shrink-0 hidden sm:flex items-center gap-2 bg-yellow-50/80 border border-yellow-200/60 rounded-xl px-4 py-2.5">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-600"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <span className="text-xs font-medium text-yellow-700">Klik angka untuk edit</span>
         </div>
       </div>
 

@@ -9,31 +9,32 @@ const dancingScript = Dancing_Script({ subsets: ["latin"], weight: ["700"] })
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 p-3 sm:p-4 relative overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-3 sm:p-4 relative overflow-hidden">
       {/* Animated background blobs */}
       <motion.div 
         animate={{ 
           scale: [1, 1.2, 1],
-          opacity: [0.1, 0.15, 0.1] 
+          opacity: [0.4, 0.6, 0.4] 
         }}
         transition={{ duration: 8, repeat: Infinity }}
-        className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500 rounded-full blur-[120px] pointer-events-none"
+        className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-yellow-300 rounded-full blur-[120px] pointer-events-none"
       />
       <motion.div 
         animate={{ 
           scale: [1.2, 1, 1.2],
-          opacity: [0.08, 0.12, 0.08] 
+          opacity: [0.3, 0.5, 0.3] 
         }}
         transition={{ duration: 10, repeat: Infinity }}
-        className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-500 rounded-full blur-[100px] pointer-events-none"
+        className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-yellow-200 rounded-full blur-[100px] pointer-events-none"
       />
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="w-full max-w-md z-10 relative"
       >
-        <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-2xl shadow-2xl relative z-10 text-white">
+        <Card className="w-full bg-white border-slate-200 shadow-xl text-slate-900">
           <CardHeader className="space-y-2 text-center pb-6 sm:pb-8 pt-6 sm:pt-8">
             <motion.div 
               initial={{ scale: 0 }}
@@ -41,14 +42,14 @@ export default function LoginPage() {
               transition={{ type: "spring", stiffness: 260, damping: 20, delay: 0.2 }}
               className="w-14 h-14 sm:w-16 sm:h-16 bg-yellow-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner"
             >
-              <span className="text-2xl sm:text-3xl font-bold text-black">B</span>
+              <span className="text-2xl sm:text-3xl font-bold text-slate-900">B</span>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <CardTitle className={`${dancingScript.className} text-4xl sm:text-5xl tracking-tight text-white`}>Bujon</CardTitle>
+              <CardTitle className={`${dancingScript.className} text-4xl sm:text-5xl tracking-tight text-slate-900`}>Bujon</CardTitle>
             </motion.div>
           </CardHeader>
           <CardContent className="pb-6 sm:pb-8">

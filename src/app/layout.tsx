@@ -10,13 +10,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Carwash Management",
+  title: "Bujon | Steam Cuci Mobil & Motor",
   description: "Aplikasi Point of Sale untuk usaha steam cuci mobil dan motor",
   manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4f46e5",
+  themeColor: "#facc15",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,

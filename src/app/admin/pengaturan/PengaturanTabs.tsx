@@ -190,8 +190,8 @@ function NotifikasiTab({ onResult }: { onResult: (msg: string, type: "success" |
           <button
             onClick={handleToggle}
             disabled={!supported || permission === "denied"}
-            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-              enabled ? "bg-indigo-600" : "bg-slate-200"
+            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+              enabled ? "bg-yellow-400" : "bg-slate-200"
             }`}
           >
             <span
@@ -210,9 +210,9 @@ function NotifikasiTab({ onResult }: { onResult: (msg: string, type: "success" |
         </div>
       </div>
 
-      <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 p-6">
-        <h3 className="text-sm font-bold text-indigo-700 mb-2">Cara Kerja</h3>
-        <ul className="text-sm text-indigo-600/80 space-y-1.5 list-disc list-inside">
+      <div className="bg-yellow-50/50 rounded-xl border border-yellow-100 p-6">
+        <h3 className="text-sm font-bold text-yellow-700 mb-2">Cara Kerja</h3>
+        <ul className="text-sm text-yellow-700/80 space-y-1.5 list-disc list-inside">
           <li>Saat kasir mencatat transaksi baru, sistem akan mengirim notifikasi realtime</li>
           <li>Toast in-app selalu muncul di pojok kanan bawah</li>
           <li>Notifikasi browser (native) hanya muncul jika toggle di atas diaktifkan</li>
@@ -458,7 +458,7 @@ export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: 
         <button
           onClick={() => setActiveTab("akun")}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            activeTab === "akun" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+            activeTab === "akun" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
           Akun Saya
@@ -466,7 +466,7 @@ export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: 
         <button
           onClick={() => setActiveTab("notifikasi")}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-            activeTab === "notifikasi" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"
+            activeTab === "notifikasi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
           Notifikasi

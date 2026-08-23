@@ -144,7 +144,7 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
               onChange={(e) => setTarif(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isPending}
-              className="w-36 h-9 pl-14 text-sm bg-white border-indigo-300 focus-visible:ring-indigo-500"
+              className="w-36 h-9 pl-14 text-sm bg-white border-yellow-300 focus-visible:ring-yellow-400"
             />
           </div>
           <div className="relative">
@@ -158,11 +158,11 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
               onKeyDown={handleKeyDown}
               onBlur={handleSave}
               disabled={isPending}
-              className="w-40 h-9 pl-20 text-sm bg-white border-indigo-300 focus-visible:ring-indigo-500"
+              className="w-40 h-9 pl-20 text-sm bg-white border-yellow-300 focus-visible:ring-yellow-400"
             />
           </div>
           {isPending && (
-            <div className="w-5 h-5 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-yellow-200 border-t-yellow-400 rounded-full animate-spin" />
           )}
         </div>
         <span className="text-xs text-slate-400 pl-1">
@@ -175,14 +175,14 @@ function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: s
   return (
     <button
       onClick={() => setEditing(true)}
-      className="group flex flex-col items-start gap-0.5 px-3 py-2 -mx-3 -my-2 rounded-lg hover:bg-indigo-50/80 transition-colors cursor-pointer text-left"
+      className="group flex flex-col items-start gap-0.5 px-3 py-2 -mx-3 -my-2 rounded-lg hover:bg-yellow-50/80 transition-colors cursor-pointer text-left"
       title="Klik untuk edit tarif & jatah karyawan"
     >
       <div className="flex items-center gap-2">
         <span className="font-semibold text-slate-900 tabular-nums">
           {formatRupiah(item.tarif_default)}
         </span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-indigo-500 transition-colors"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-yellow-500 transition-colors"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
       </div>
       <span className="text-xs text-slate-400 tabular-nums">
         Kry {formatRupiah(item.jatah_karyawan)} · Pemilik {formatRupiah(item.jatah_pemilik)}
@@ -200,8 +200,8 @@ function ToggleSwitch({ checked, disabled, onChange }: { checked: boolean; disab
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? "bg-indigo-600" : "bg-slate-200"
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? "bg-yellow-400" : "bg-slate-200"
       }`}
     >
       <span

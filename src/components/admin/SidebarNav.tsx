@@ -91,15 +91,15 @@ export function SidebarNav() {
             className={cn(
               "group relative flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium text-sm transition-colors duration-200 overflow-hidden",
               active
-                ? "bg-indigo-50 text-indigo-700 shadow-sm nav-active-pill"
-                : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/60"
+                ? "bg-yellow-50 text-slate-900 shadow-sm nav-active-pill"
+                : "text-slate-600 hover:text-yellow-600 hover:bg-yellow-50/60"
             )}
           >
             {/* Active indicator dengan motion — hanya di desktop */}
             {active && (
               <motion.div
                 layoutId="activeNav"
-                className="absolute inset-0 bg-indigo-50 rounded-xl -z-10"
+                className="absolute inset-0 bg-yellow-50 rounded-xl -z-10"
                 transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
@@ -107,7 +107,7 @@ export function SidebarNav() {
             <span
               className={cn(
                 "shrink-0 transition-colors duration-200",
-                active ? "text-indigo-600" : "text-slate-400 group-hover:text-indigo-500"
+                active ? "text-yellow-600" : "text-slate-400 group-hover:text-yellow-500"
               )}
             >
               {item.icon}
@@ -116,7 +116,7 @@ export function SidebarNav() {
               {item.label}
             </span>
             {active && (
-              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+              <span className="ml-auto w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0" />
             )}
           </Link>
         )
@@ -153,8 +153,8 @@ export function MobileNav() {
             className={cn(
               "relative px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200",
               active
-                ? "bg-indigo-600 text-white shadow-sm shadow-indigo-500/30"
-                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                ? "bg-yellow-400 text-slate-900 shadow-sm shadow-yellow-400/30"
+                : "text-slate-600 hover:bg-yellow-50 hover:text-yellow-600"
             )}
           >
             {labelShort[item.href] ?? item.label}

@@ -128,14 +128,14 @@ function NavCard({
         <motion.div
           whileHover={{ y: -6, boxShadow: "0 20px 40px -12px rgba(99, 102, 241, 0.15)" }}
           transition={{ type: "spring", stiffness: 400, damping: 25 }}
-          className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-indigo-200 hover:bg-white transition-all duration-300 h-full flex flex-col relative overflow-hidden"
+          className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-yellow-300 hover:bg-white transition-all duration-300 h-full flex flex-col relative overflow-hidden"
         >
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transform group-hover:scale-110 transition-all duration-500 text-indigo-600">
+          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transform group-hover:scale-110 transition-all duration-500 text-yellow-500">
             <Icon className="w-20 h-20" />
           </div>
 
           <motion.div
-            className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300"
+            className="w-12 h-12 bg-yellow-50 text-yellow-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-yellow-400 group-hover:text-slate-900 transition-colors duration-300"
             whileHover={{ rotate: 5 }}
           >
             <Icon className="w-6 h-6" />
@@ -144,7 +144,7 @@ function NavCard({
           <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
           <p className="text-slate-500 flex-1 leading-relaxed">{desc}</p>
 
-          <div className="mt-6 flex items-center text-indigo-600 text-sm font-semibold">
+          <div className="mt-6 flex items-center text-yellow-600 text-sm font-semibold">
             <span>Buka menu</span>
             <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
           </div>
@@ -170,7 +170,7 @@ export function DashboardContent({ stats }: { stats: Stats }) {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
           {pendingRefresh && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs font-medium border border-indigo-100 animate-pulse">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-600 text-xs font-medium border border-yellow-200 animate-pulse">
               <RefreshCw className="w-3 h-3 animate-spin" />
               Memperbarui...
             </span>
@@ -241,7 +241,7 @@ export function DashboardContent({ stats }: { stats: Stats }) {
             <h3 className="text-sm font-bold text-slate-700">Transaksi Terbaru</h3>
             <Link
               href="/admin/rekap"
-              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 group"
+              className="text-xs font-semibold text-yellow-600 hover:text-yellow-700 flex items-center gap-1 group"
             >
               Lihat semua
               <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
@@ -254,11 +254,11 @@ export function DashboardContent({ stats }: { stats: Stats }) {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.7 + i * 0.05 }}
-                whileHover={{ backgroundColor: "rgba(99, 102, 241, 0.03)" }}
+                whileHover={{ backgroundColor: "rgba(234, 179, 8, 0.05)" }}
                 className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center text-xs font-bold shrink-0">
                     {t.kategori === "Motor" ? "M" : "🚗"}
                   </div>
                   <div>

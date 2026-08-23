@@ -43,7 +43,7 @@ function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (ms
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null)
 
@@ -126,7 +126,7 @@ function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (ms
               onClick={() => setRole("kasir")}
               className={`h-11 rounded-xl border-2 text-sm font-semibold transition-all ${
                 role === "kasir"
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                  ? "border-yellow-400 bg-yellow-50 text-slate-900"
                   : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
               }`}
             >
@@ -137,7 +137,7 @@ function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (ms
               onClick={() => setRole("admin")}
               className={`h-11 rounded-xl border-2 text-sm font-semibold transition-all ${
                 role === "admin"
-                  ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                  ? "border-yellow-400 bg-yellow-50 text-slate-900"
                   : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
               }`}
             >
@@ -165,7 +165,7 @@ function ResetPasswordForm({ user, onClose, onResult }: { user: UserProfile; onC
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null)
 
@@ -240,7 +240,7 @@ function EditUserForm({ user, onClose, onResult }: { user: UserProfile; onClose:
 
   const usernameChanged = username.trim() !== user.username
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault()
     setError(null)
 
@@ -383,7 +383,7 @@ function RoleBadge({ role }: { role: string }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
       role === "admin"
-        ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+        ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
         : "bg-slate-100 text-slate-600 border border-slate-200"
     }`}>
       {role === "admin" ? "Admin" : "Kasir"}
@@ -491,7 +491,7 @@ export function UserTable({ data, currentUserId }: { data: UserProfile[]; curren
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center font-bold text-sm shrink-0">
                     {(userItem.nama_lengkap || userItem.username)[0].toUpperCase()}
                   </div>
 
