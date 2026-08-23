@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS activity_logs (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NULL,
+  user_name VARCHAR(100) NULL,
+  user_role ENUM('kasir', 'admin') NULL,
+  action ENUM('LOGIN', 'LOGOUT', 'CREATE', 'UPDATE', 'DELETE', 'EXPORT', 'PRINT') NOT NULL,
+  entity_type VARCHAR(50) NOT NULL COMMENT 'transaksi, tarif, user, pengaturan, laporan, auth',
+  entity_id CHAR(36) NULL COMMENT 'ID record yang terkena aksi',
+  description TEXT NOT NULL COMMENT 'Penjelasan singkat dalam bahasa manusia',
+  old_value JSON NULL COMMENT 'Data sebelum perubahan',
+  new_value JSON NULL COMMENT 'Data setelah perubahan',
+  ip_address VARCHAR(45) NULL,
+  user_agent VARCHAR(255) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_activity_logs_user_id (user_id),
+  KEY idx_activity_logs_action (action),
+  KEY idx_activity_logs_entity (entity_type, entity_id),
+  KEY idx_activity_logs_created_at (created_at),
+  KEY idx_activity_logs_user_role (user_role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

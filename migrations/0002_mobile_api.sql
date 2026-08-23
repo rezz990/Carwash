@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS mobile_sessions (
   INDEX idx_mobile_sessions_user (user_id),
   INDEX idx_mobile_sessions_expiry (expires_at),
   INDEX idx_mobile_sessions_revoked (revoked_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

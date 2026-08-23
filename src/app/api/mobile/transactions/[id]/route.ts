@@ -1,7 +1,8 @@
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import pool from "@/lib/db";
 import { utcSqlToIso } from "@/lib/datetime";
-import { jsonError, jsonOk, requireMobileAuth } from "@/lib/mobile/http";
+import { jsonError, jsonOk, requireMobileAuth, getClientIp } from "@/lib/mobile/http";
+import { logActivity } from "@/lib/activityLog";
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -132,6 +133,35 @@ export async function PATCH(
       [jenisKendaraanId, platNomor, tarif, jatahKaryawan, jatahPemilik, id],
     );
     await connection.commit();
+    /* * Catat activity log - jangan sampai gagal log menggagalkan response. */
+    try {
+      await logActivity({
+        actor: {
+          id: auth.user.id,
+          username: auth.user.username,
+          role: auth.user.role,
+        },
+        action: "UPDATE",
+        entityType: "transaksi",
+        entityId: id,
+        description: `Kasir "${auth.user.username}" mengedit transaksi plat "${platNomor}"`,
+        oldValue: {
+          jenis_kendaraan_id: transaction.jenis_kendaraan_id,
+          plat_nomor: transaction.plat_nomor,
+        },
+        newValue: {
+          jenis_kendaraan_id: jenisKendaraanId,
+          plat_nomor: platNomor,
+          tarif_total: tarif,
+          tarif_jatah_karyawan: jatahKaryawan,
+          tarif_jatah_pemilik: jatahPemilik,
+        },
+        ip: getClientIp(request),
+        userAgent: request.headers.get("user-agent"),
+      });
+    } catch (logError) {
+      console.error("Activity log error:", logError);
+    }
     /* * Ambil kembali data terbaru setelah UPDATE. */ const [updatedRows] =
       await pool.query<RowDataPacket[]>(
         `SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, t.edited_at, jk.id AS jenis_id, jk.kategori, jk.ukuran, u.id AS kasir_id, u.username AS kasir_username, u.nama_lengkap AS kasir_nama FROM transaksi t JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id JOIN users u ON u.id = t.kasir_id WHERE t.id = ? LIMIT 1`,

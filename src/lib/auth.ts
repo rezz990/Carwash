@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import pool from "@/lib/db";
 import type { RowDataPacket } from "mysql2";
+import { logActivity } from "@/lib/activityLog";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -30,20 +31,48 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (rows.length === 0) {
+          await logActivity({
+            actor: null,
+            action: "LOGIN",
+            entityType: "auth",
+            description: `Percobaan login gagal, username "${credentials.username}" tidak ditemukan`,
+          });
           return null;
         }
 
         const user = rows[0];
 
         if (!user.aktif) {
+          await logActivity({
+            actor: { id: user.id, username: user.username, role: user.role },
+            action: "LOGIN",
+            entityType: "auth",
+            entityId: user.id,
+            description: `Percobaan login ditolak, akun "${user.username}" dinonaktifkan`,
+          });
           throw new Error("Akun dinonaktifkan");
         }
 
         const isValidPassword = await bcrypt.compare(credentials.password, user.password_hash);
 
         if (!isValidPassword) {
+          await logActivity({
+            actor: { id: user.id, username: user.username, role: user.role },
+            action: "LOGIN",
+            entityType: "auth",
+            entityId: user.id,
+            description: `Percobaan login gagal untuk "${user.username}", password salah`,
+          });
           return null;
         }
+
+        await logActivity({
+          actor: { id: user.id, username: user.username, role: user.role },
+          action: "LOGIN",
+          entityType: "auth",
+          entityId: user.id,
+          description: `Login berhasil sebagai "${user.username}"`,
+        });
 
         return {
           id: user.id,
@@ -67,6 +96,21 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role;
       }
       return session;
+    },
+  },
+  events: {
+    async signOut({ token }) {
+      const id = (token as any)?.id as string | undefined;
+      const username = (token as any)?.name as string | undefined;
+      const role = (token as any)?.role as string | undefined;
+      if (!id) return;
+      await logActivity({
+        actor: { id, username, role: role as "admin" | "kasir" | undefined },
+        action: "LOGOUT",
+        entityType: "auth",
+        entityId: id,
+        description: `Logout dari akun "${username ?? id}"`,
+      });
     },
   },
 };

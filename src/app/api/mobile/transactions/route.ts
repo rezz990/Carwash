@@ -14,6 +14,7 @@ import {
   normalizePlate,
   isValidPlate,
   requireMobileAuth,
+  getClientIp,
 } from "@/lib/mobile/http";
 
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/lib/events";
 
 import { requireAdmin } from "@/lib/authz";
+import { logActivity } from "@/lib/activityLog";
 
 export const dynamic = "force-dynamic";
 
@@ -237,6 +239,35 @@ export async function POST(request: Request) {
        =============================== */
 
     await connection.commit();
+
+    /* ===============================
+       ACTIVITY LOG
+       =============================== */
+
+    try {
+      await logActivity({
+        actor: {
+          id: auth.user.id,
+          username: auth.user.username,
+          role: auth.user.role,
+        },
+        action: "CREATE",
+        entityType: "transaksi",
+        entityId: id,
+        description: `Kasir "${auth.user.username}" membuat transaksi plat "${plate}" (${vehicle.kategori} ${vehicle.ukuran})`,
+        newValue: {
+          plat_nomor: plate,
+          jenis_kendaraan_id: vehicle.id,
+          tarif_total: tarif,
+          tarif_jatah_karyawan: jatahKaryawan,
+          tarif_jatah_pemilik: jatahPemilik,
+        },
+        ip: getClientIp(request),
+        userAgent: request.headers.get("user-agent"),
+      });
+    } catch (logError) {
+      console.error("Activity log error:", logError);
+    }
 
     /* ===============================
        BROADCAST REALTIME

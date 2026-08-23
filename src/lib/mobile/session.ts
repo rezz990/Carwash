@@ -35,5 +35,13 @@ export async function rotateMobileSession(refreshToken: string) {
 }
 
 export async function revokeMobileSession(refreshToken: string) {
-  await pool.query<ResultSetHeader>("UPDATE mobile_sessions SET revoked_at = UTC_TIMESTAMP() WHERE refresh_token_hash = ? AND revoked_at IS NULL", [hash(refreshToken)])
+  const tokenHash = hash(refreshToken)
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT ms.user_id, u.username, u.role FROM mobile_sessions ms JOIN users u ON u.id = ms.user_id WHERE ms.refresh_token_hash = ? AND ms.revoked_at IS NULL LIMIT 1`,
+    [tokenHash]
+  )
+  const session = rows[0]
+  await pool.query<ResultSetHeader>("UPDATE mobile_sessions SET revoked_at = UTC_TIMESTAMP() WHERE refresh_token_hash = ? AND revoked_at IS NULL", [tokenHash])
+  if (!session) return null
+  return { userId: String(session.user_id), username: String(session.username), role: session.role as "kasir" | "admin" }
 }

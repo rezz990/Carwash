@@ -8,6 +8,12 @@ import pool from "@/lib/db"
 import bcrypt from "bcryptjs"
 import type { RowDataPacket } from "mysql2"
 import { utcSqlToIso } from "@/lib/datetime"
+import { logActivity, type ActivityActor } from "@/lib/activityLog"
+
+function toActor(user: { id: string; username: string; role: string } | null): ActivityActor {
+  if (!user) return null
+  return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" }
+}
 
 // ---------------------------------------------------------
 // AKUN SAYA
@@ -16,13 +22,30 @@ import { utcSqlToIso } from "@/lib/datetime"
 export async function updateOwnProfile(namaLengkap: string) {
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id
+  const username = (session?.user as any)?.name
   if (!userId) return { error: "Anda harus login" }
 
   try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT nama_lengkap FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    )
+    const oldNama = rows[0]?.nama_lengkap ?? null
+
     await pool.query(
       "UPDATE users SET nama_lengkap = ? WHERE id = ?",
       [namaLengkap.trim() || null, userId]
     )
+
+    await logActivity({
+      actor: { id: userId, username },
+      action: "UPDATE",
+      entityType: "user",
+      entityId: userId,
+      description: "Mengubah nama lengkap akun sendiri",
+      oldValue: { nama_lengkap: oldNama },
+      newValue: { nama_lengkap: namaLengkap.trim() || null },
+    })
   } catch (error) {
     console.error("Update own profile error:", error)
     return { error: "Gagal menyimpan nama" }
@@ -35,6 +58,7 @@ export async function updateOwnProfile(namaLengkap: string) {
 export async function updateOwnUsername(username: string) {
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id
+  const oldUsername = (session?.user as any)?.name
   if (!userId) return { error: "Sesi tidak valid" }
 
   const clean = username.trim().toLowerCase()
@@ -50,6 +74,17 @@ export async function updateOwnUsername(username: string) {
   if (existing.length > 0) return { error: "Username sudah dipakai user lain" }
 
   await pool.query("UPDATE users SET username = ? WHERE id = ?", [clean, userId])
+
+  await logActivity({
+    actor: { id: userId, username: clean },
+    action: "UPDATE",
+    entityType: "user",
+    entityId: userId,
+    description: `Mengubah username sendiri dari "${oldUsername ?? "?"}" menjadi "${clean}"`,
+    oldValue: { username: oldUsername ?? null },
+    newValue: { username: clean },
+  })
+
   revalidatePath("/pengaturan") // sesuaikan dengan route halaman ini
   return { success: true }
 }
@@ -60,6 +95,7 @@ export async function changeOwnPassword(params: {
 }) {
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id
+  const username = (session?.user as any)?.name
   if (!userId) return { error: "Anda harus login" }
 
   if (params.newPassword.length < 6) {
@@ -85,6 +121,16 @@ export async function changeOwnPassword(params: {
       "UPDATE users SET password_hash = ? WHERE id = ?",
       [newPasswordHash, userId]
     )
+
+    // Tidak pernah menyimpan old_value/new_value untuk password, meski sudah
+    // di-hash - cukup catat bahwa aksinya terjadi.
+    await logActivity({
+      actor: { id: userId, username },
+      action: "UPDATE",
+      entityType: "auth",
+      entityId: userId,
+      description: "Mengubah password akun sendiri",
+    })
   } catch (error) {
     console.error("Change password error:", error)
     return { error: "Gagal mengubah password" }
@@ -109,7 +155,7 @@ export type BackupRow = {
 }
 
 export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[]; error?: string }> {
-  const { error: authError } = await requireAdmin()
+  const { error: authError, user: currentUser } = await requireAdmin()
   if (authError) return { data: [], error: authError }
 
   try {
@@ -128,6 +174,14 @@ export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[];
       tarif_jatah_pemilik: Number(r.tarif_jatah_pemilik)
     }))
 
+    await logActivity({
+      actor: toActor(currentUser as any),
+      action: "EXPORT",
+      entityType: "laporan",
+      description: `Mengekspor backup seluruh data transaksi (${data.length} baris)`,
+      newValue: { jumlah_baris: data.length },
+    })
+
     return { data: data as BackupRow[] }
   } catch (error) {
     console.error("Fetch backup error:", error)
@@ -139,7 +193,7 @@ export async function restoreTransaksiBackup(params: {
   rows: BackupRow[]
   mode: "append" | "replace"
 }) {
-  const { error: authError } = await requireAdmin()
+  const { error: authError, user: currentUser } = await requireAdmin()
   if (authError) return { error: authError }
 
   if (!Array.isArray(params.rows) || params.rows.length === 0) {
@@ -204,16 +258,37 @@ export async function restoreTransaksiBackup(params: {
     connection.release()
   }
 
+  await logActivity({
+    actor: toActor(currentUser as any),
+    action: "CREATE",
+    entityType: "laporan",
+    description: `Restore backup transaksi, mode "${params.mode}" (${params.rows.length} baris)${params.mode === "replace" ? " - data transaksi lama DIHAPUS dulu" : ""}`,
+    newValue: { mode: params.mode, jumlah_baris: params.rows.length },
+  })
+
   revalidatePath("/admin", "layout")
   return { success: true, jumlahRestored: params.rows.length }
 }
 
 export async function resetTransaksiData() {
-  const { error: authError } = await requireAdmin()
+  const { error: authError, user: currentUser } = await requireAdmin()
   if (authError) return { error: authError }
 
   try {
+    const [countRows] = await pool.query<RowDataPacket[]>(
+      "SELECT COUNT(*) as count FROM transaksi"
+    )
+    const jumlahTerhapus = Number(countRows[0]?.count ?? 0)
+
     await pool.query("DELETE FROM transaksi")
+
+    await logActivity({
+      actor: toActor(currentUser as any),
+      action: "DELETE",
+      entityType: "laporan",
+      description: `MENGHAPUS SEMUA data transaksi (${jumlahTerhapus} baris) - aksi zona bahaya`,
+      oldValue: { jumlah_baris: jumlahTerhapus },
+    })
   } catch (error) {
     console.error("Reset data error:", error)
     return { error: "Gagal menghapus data transaksi" }
