@@ -1,5 +1,50 @@
 import { headers } from "next/headers"
 import pool from "@/lib/db"
+import { nowUtcSql } from "@/lib/datetime"
+import type { ResultSetHeader } from "mysql2"
+
+const DEFAULT_RETENTION_DAYS = 90
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000
+const CLEANUP_BATCH_SIZE = 5_000
+
+const globalForActivityLog = globalThis as unknown as {
+  activityLogCleanupLastAttempt?: number
+}
+
+function getRetentionDays(): number {
+  const configured = Number(process.env.ACTIVITY_LOG_RETENTION_DAYS ?? DEFAULT_RETENTION_DAYS)
+  if (!Number.isInteger(configured) || configured < 1) return DEFAULT_RETENTION_DAYS
+  return Math.min(configured, 3_650)
+}
+
+/**
+ * Hapus log kedaluwarsa paling banyak sekali per proses dalam 24 jam.
+ * Cleanup dijalankan bertahap agar tidak menahan lock terlalu lama ketika log menumpuk.
+ */
+async function cleanupExpiredActivityLogs(): Promise<void> {
+  const now = Date.now()
+  if (
+    globalForActivityLog.activityLogCleanupLastAttempt &&
+    now - globalForActivityLog.activityLogCleanupLastAttempt < CLEANUP_INTERVAL_MS
+  ) {
+    return
+  }
+
+  globalForActivityLog.activityLogCleanupLastAttempt = now
+  const cutoff = new Date(now - getRetentionDays() * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ")
+
+  let affectedRows: number
+  do {
+    const [result] = await pool.query<ResultSetHeader>(
+      "DELETE FROM activity_logs WHERE created_at < ? LIMIT ?",
+      [cutoff, CLEANUP_BATCH_SIZE]
+    )
+    affectedRows = result.affectedRows
+  } while (affectedRows === CLEANUP_BATCH_SIZE)
+}
 
 /**
  * Harus sinkron dengan ENUM di migrations/0003_activity_log.sql
@@ -81,8 +126,8 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
 
     await pool.query(
       `INSERT INTO activity_logs
-        (id, user_id, user_name, user_role, action, entity_type, entity_id, description, old_value, new_value, ip_address, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, user_id, user_name, user_role, action, entity_type, entity_id, description, old_value, new_value, ip_address, user_agent, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crypto.randomUUID(),
         params.actor?.id ?? null,
@@ -96,10 +141,21 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
         params.newValue === undefined ? null : JSON.stringify(params.newValue),
         ip ? ip.slice(0, 45) : null,
         userAgent ? userAgent.slice(0, 255) : null,
+        nowUtcSql(),
       ]
     )
+
   } catch (error) {
     // Sengaja hanya di-log ke console, tidak di-throw ulang.
     console.error("logActivity gagal mencatat activity log:", error)
+    return
+  }
+
+  try {
+    await cleanupExpiredActivityLogs()
+  } catch (error) {
+    // Cleanup bersifat pemeliharaan dan tidak boleh mengubah hasil aksi utama
+    // maupun membuat log yang baru saja berhasil disimpan dianggap gagal.
+    console.error("Cleanup activity log kedaluwarsa gagal:", error)
   }
 }

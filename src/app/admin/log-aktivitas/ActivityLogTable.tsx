@@ -9,6 +9,7 @@ import {
   type ActivityLogFilters,
 } from "./actions"
 import { todayWib, addWibDays } from "@/lib/formatters"
+import { BUSINESS_TIMEZONE } from "@/lib/datetime"
 
 const ACTION_OPTIONS = [
   { value: "all", label: "Semua aksi" },
@@ -50,7 +51,7 @@ function formatWaktuLengkap(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    timeZone: "Asia/Jakarta",
+    timeZone: BUSINESS_TIMEZONE,
   })
 }
 
@@ -135,7 +136,7 @@ export function ActivityLogTable({
 }: {
   userOptions: { id: string; label: string }[]
 }) {
-  const PAGE_SIZE = 20
+  const PAGE_SIZE = 50
 
   const [dateFrom, setDateFrom] = useState(addWibDays(todayWib(), -7))
   const [dateTo, setDateTo] = useState(todayWib())
@@ -155,7 +156,6 @@ export function ActivityLogTable({
     (targetPage: number) => {
       const filters: ActivityLogFilters = {
         page: targetPage,
-        pageSize: PAGE_SIZE,
         dateFrom,
         dateTo,
         action: action as ActivityLogFilters["action"],
@@ -269,7 +269,7 @@ export function ActivityLogTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
-                <th className="px-4 py-3 font-medium">Waktu</th>
+                <th className="px-4 py-3 font-medium">Waktu (WIB)</th>
                 <th className="px-4 py-3 font-medium">Aksi</th>
                 <th className="px-4 py-3 font-medium">Pelaku</th>
                 <th className="px-4 py-3 font-medium">Deskripsi</th>
