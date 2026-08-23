@@ -13,7 +13,7 @@ export default async function LogAktivitasPage() {
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Log Aktivitas</h1>
         <p className="text-slate-500 mt-1.5 sm:mt-2 text-sm sm:text-base">
-          Riwayat semua aksi penting: login/logout, transaksi, perubahan tarif, dan perubahan data user.
+          Riwayat semua aksi penting dalam waktu WIB. Setiap halaman menampilkan 50 log dan log lama dibersihkan otomatis.
         </p>
       </div>
 
