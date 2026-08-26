@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader } from "mysql2";
 import {
-  verifyMobileAccessToken,
-  type MobileAccessTokenPayload
+  verifyMobileAccessToken
 } from "@/lib/mobile/jwt";
+import { getLoginTimeoutMinutes } from "@/lib/loginTimeout";
 
 export function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json({ success: false, error: { code, message, ...(details === undefined ? {} : { details }) } }, { status });
@@ -22,6 +23,19 @@ export async function requireMobileAuth(request: Request, allowedRoles: Array<"k
   const token = verifyMobileAccessToken(match[1]);
   if (!token || !allowedRoles.includes(token.role)) {
     return { error: jsonError(401, "INVALID_TOKEN", "Token tidak valid atau sudah kedaluwarsa") } as const;
+  }
+
+  const timeoutMinutes = await getLoginTimeoutMinutes();
+  const [sessionResult] = await pool.query<ResultSetHeader>(
+    `UPDATE mobile_sessions
+     SET last_activity_at = GREATEST(UTC_TIMESTAMP(6), DATE_ADD(last_activity_at, INTERVAL 1 MICROSECOND))
+     WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+       AND expires_at > UTC_TIMESTAMP()
+       AND last_activity_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)`,
+    [token.sid, token.sub, timeoutMinutes]
+  );
+  if (sessionResult.affectedRows === 0) {
+    return { error: jsonError(401, "SESSION_TIMEOUT", "Sesi berakhir karena tidak ada aktivitas") } as const;
   }
 
   const [rows] = await pool.query<RowDataPacket[]>(

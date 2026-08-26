@@ -47,7 +47,6 @@ export type TransaksiDetail = {
 
 export type RekapResult = {
   harian: RekapHarian[];
-  detail: TransaksiDetail[];
   totalPendapatanKotor: number;
   totalBagianKaryawan: number;
   totalPendapatanBersih: number;
@@ -56,36 +55,40 @@ export type RekapResult = {
   error?: string;
 };
 
-function getTanggalKeyJakarta(dateString: string | Date): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIMEZONE,
-  }).format(utcSqlToDate(dateString));
-}
+export type TransactionDateGroup = {
+  tanggalKey: string;
+  totalTransaksi: number;
+  pendapatanKotor: number;
+  bagianKaryawan: number;
+  pendapatanBersih: number;
+};
+
+export type PaginatedTransactionGroups = {
+  data: TransactionDateGroup[];
+  total: number;
+  page: number;
+  pageSize: number;
+  error?: string;
+};
+
+export type PaginatedDailyTransactions = {
+  data: TransaksiDetail[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPendapatanKotor: number;
+  totalBagianKaryawan: number;
+  totalPendapatanBersih: number;
+  error?: string;
+};
+
+const DETAIL_PAGE_SIZE = 50;
 
 function getHariJakarta(dateString: string | Date): string {
   return new Intl.DateTimeFormat("id-ID", {
     timeZone: BUSINESS_TIMEZONE,
     weekday: "long",
   }).format(utcSqlToDate(dateString));
-}
-
-function getKategoriKey(
-  kategori: string,
-  ukuran: string,
-):
-  | keyof Pick<
-      RekapHarian,
-      "motorKecil" | "motorBesar" | "mobilKecil" | "mobilSedang" | "mobilBesar"
-    >
-  | null {
-  const k = kategori.toLowerCase();
-  const u = ukuran.toLowerCase();
-  if (k === "motor" && u === "kecil") return "motorKecil";
-  if (k === "motor" && u === "besar") return "motorBesar";
-  if (k === "mobil" && u === "kecil") return "mobilKecil";
-  if (k === "mobil" && u === "sedang") return "mobilSedang";
-  if (k === "mobil" && u === "besar") return "mobilBesar";
-  return null;
 }
 
 export async function fetchRekap(params: {
@@ -96,7 +99,6 @@ export async function fetchRekap(params: {
   if (authError) {
     return {
       harian: [],
-      detail: [],
       totalPendapatanKotor: 0,
       totalBagianKaryawan: 0,
       totalPendapatanBersih: 0,
@@ -114,77 +116,39 @@ export async function fetchRekap(params: {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
       `
-      SELECT t.id, t.tanggal_waktu, t.edited_at, t.plat_nomor, t.tarif_total, t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, 
-             jk.kategori, jk.ukuran, u.username, u.nama_lengkap
+      SELECT DATE(DATE_ADD(t.tanggal_waktu, INTERVAL 7 HOUR)) AS tanggal,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'motor' AND LOWER(jk.ukuran) = 'kecil' THEN 1 ELSE 0 END) AS motor_kecil,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'motor' AND LOWER(jk.ukuran) = 'besar' THEN 1 ELSE 0 END) AS motor_besar,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'mobil' AND LOWER(jk.ukuran) = 'kecil' THEN 1 ELSE 0 END) AS mobil_kecil,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'mobil' AND LOWER(jk.ukuran) = 'sedang' THEN 1 ELSE 0 END) AS mobil_sedang,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'mobil' AND LOWER(jk.ukuran) = 'besar' THEN 1 ELSE 0 END) AS mobil_besar,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'motor' THEN 1 ELSE 0 END) AS total_motor,
+             SUM(CASE WHEN LOWER(jk.kategori) = 'mobil' THEN 1 ELSE 0 END) AS total_mobil,
+             COUNT(*) AS total_transaksi,
+             COALESCE(SUM(t.tarif_total), 0) AS pendapatan_kotor,
+             COALESCE(SUM(t.tarif_jatah_karyawan), 0) AS bagian_karyawan,
+             COALESCE(SUM(t.tarif_jatah_pemilik), 0) AS pendapatan_bersih
       FROM transaksi t
       LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
-      LEFT JOIN users u ON t.kasir_id = u.id
       WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
-      ORDER BY t.tanggal_waktu ASC
+      GROUP BY tanggal
+      ORDER BY tanggal ASC
     `,
       [startDate, endDate],
     );
 
-    const harianMap = new Map<string, RekapHarian>();
-
-    for (const row of rows) {
-      const dateObj = utcSqlToDate(row.tanggal_waktu);
-      const tanggalKey = getTanggalKeyJakarta(dateObj);
-
-      if (!harianMap.has(tanggalKey)) {
-        harianMap.set(tanggalKey, {
-          tanggal: tanggalKey,
-          hari: getHariJakarta(dateObj),
-          motorKecil: 0,
-          motorBesar: 0,
-          mobilKecil: 0,
-          mobilSedang: 0,
-          mobilBesar: 0,
-          totalMotor: 0,
-          totalMobil: 0,
-          pendapatanKotor: 0,
-          bagianKaryawan: 0,
-          pendapatanBersih: 0,
-        });
-      }
-
-      const entry = harianMap.get(tanggalKey)!;
-
-      if (row.kategori && row.ukuran) {
-        const key = getKategoriKey(row.kategori, row.ukuran);
-        if (key) {
-          entry[key] += 1;
-          if (key.startsWith("motor")) entry.totalMotor += 1;
-          else entry.totalMobil += 1;
-        }
-      }
-
-      entry.pendapatanKotor += Number(row.tarif_total) || 0;
-      entry.bagianKaryawan += Number(row.tarif_jatah_karyawan) || 0;
-      entry.pendapatanBersih += Number(row.tarif_jatah_pemilik) || 0;
-    }
-
-    const harian = Array.from(harianMap.values()).sort((a, b) =>
-      a.tanggal.localeCompare(b.tanggal),
-    );
-
-    const detail: TransaksiDetail[] = rows
-      .map((row) => {
-        const dateObj = utcSqlToDate(row.tanggal_waktu);
-        return {
-          id: row.id,
-          tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
-          edited_at: row.edited_at ? utcSqlToIso(row.edited_at) : null,
-          plat_nomor: row.plat_nomor,
-          tarif_total: Number(row.tarif_total) || 0,
-          tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan) || 0,
-          tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik) || 0,
-          kategori: row.kategori || "-",
-          ukuran: row.ukuran || "-",
-          kasir_nama: row.nama_lengkap || row.username || null,
-        };
-      })
-      .reverse();
+    const harian: RekapHarian[] = rows.map((row) => {
+      const tanggal = String(row.tanggal);
+      return {
+        tanggal,
+        hari: getHariJakarta(`${tanggal} 00:00:00`),
+        motorKecil: Number(row.motor_kecil), motorBesar: Number(row.motor_besar),
+        mobilKecil: Number(row.mobil_kecil), mobilSedang: Number(row.mobil_sedang), mobilBesar: Number(row.mobil_besar),
+        totalMotor: Number(row.total_motor), totalMobil: Number(row.total_mobil),
+        pendapatanKotor: Number(row.pendapatan_kotor), bagianKaryawan: Number(row.bagian_karyawan),
+        pendapatanBersih: Number(row.pendapatan_bersih),
+      };
+    });
 
     const totalPendapatanKotor = harian.reduce(
       (acc, h) => acc + h.pendapatanKotor,
@@ -198,13 +162,12 @@ export async function fetchRekap(params: {
       (acc, h) => acc + h.pendapatanBersih,
       0,
     );
-    const totalTransaksi = rows.length;
+    const totalTransaksi = rows.reduce((sum, row) => sum + Number(row.total_transaksi), 0);
     const rataRataPerHari =
       harian.length > 0 ? totalPendapatanKotor / harian.length : 0;
 
     return {
       harian,
-      detail,
       totalPendapatanKotor,
       totalBagianKaryawan,
       totalPendapatanBersih,
@@ -215,7 +178,6 @@ export async function fetchRekap(params: {
     console.error("Fetch rekap error:", error);
     return {
       harian: [],
-      detail: [],
       totalPendapatanKotor: 0,
       totalBagianKaryawan: 0,
       totalPendapatanBersih: 0,
@@ -223,6 +185,138 @@ export async function fetchRekap(params: {
       rataRataPerHari: 0,
       error: "Gagal memuat data rekap",
     };
+  }
+}
+
+export async function fetchTransactionDateGroups(params: {
+  dateFrom: string;
+  dateTo: string;
+  page?: number;
+  search?: string;
+}): Promise<PaginatedTransactionGroups> {
+  const { error } = await requireAdmin();
+  const page = Number.isSafeInteger(params.page) ? Math.max(1, params.page ?? 1) : 1;
+  if (error) return { data: [], total: 0, page, pageSize: DETAIL_PAGE_SIZE, error };
+
+  const startDate = jakartaDateToUtcSql(params.dateFrom);
+  const endDate = jakartaDateToUtcSql(params.dateTo, true);
+  const search = params.search?.trim().slice(0, 100) ?? "";
+  const searchSql = search
+    ? `AND (t.plat_nomor LIKE ? OR u.username LIKE ? OR u.nama_lengkap LIKE ?
+         OR CONCAT(jk.kategori, ' ', jk.ukuran) LIKE ?
+         OR DATE_FORMAT(DATE_ADD(t.tanggal_waktu, INTERVAL 7 HOUR), '%Y-%m-%d') LIKE ?)`
+    : "";
+  const queryParams: unknown[] = [startDate, endDate];
+  if (search) {
+    const like = `%${search}%`;
+    queryParams.push(like, like, like, like, like);
+  }
+  const offset = (page - 1) * DETAIL_PAGE_SIZE;
+
+  try {
+    const [[rows], [countRows]] = await Promise.all([
+      pool.query<RowDataPacket[]>(`
+        SELECT DATE(DATE_ADD(t.tanggal_waktu, INTERVAL 7 HOUR)) AS tanggal,
+               COUNT(*) AS total_transaksi,
+               COALESCE(SUM(t.tarif_total), 0) AS pendapatan_kotor,
+               COALESCE(SUM(t.tarif_jatah_karyawan), 0) AS bagian_karyawan,
+               COALESCE(SUM(t.tarif_jatah_pemilik), 0) AS pendapatan_bersih
+        FROM transaksi t
+        LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        LEFT JOIN users u ON u.id = t.kasir_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ? ${searchSql}
+        GROUP BY tanggal
+        ORDER BY tanggal DESC
+        LIMIT ? OFFSET ?`,
+        [...queryParams, DETAIL_PAGE_SIZE, offset]
+      ),
+      pool.query<RowDataPacket[]>(`
+        SELECT COUNT(DISTINCT DATE(DATE_ADD(t.tanggal_waktu, INTERVAL 7 HOUR))) AS total
+        FROM transaksi t
+        LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        LEFT JOIN users u ON u.id = t.kasir_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ? ${searchSql}`,
+        queryParams
+      ),
+    ]);
+    return {
+      data: rows.map((row) => ({
+        tanggalKey: String(row.tanggal), totalTransaksi: Number(row.total_transaksi),
+        pendapatanKotor: Number(row.pendapatan_kotor), bagianKaryawan: Number(row.bagian_karyawan),
+        pendapatanBersih: Number(row.pendapatan_bersih),
+      })),
+      total: Number(countRows[0]?.total ?? 0), page, pageSize: DETAIL_PAGE_SIZE,
+    };
+  } catch (queryError) {
+    console.error("Fetch transaction groups error:", queryError);
+    return { data: [], total: 0, page, pageSize: DETAIL_PAGE_SIZE, error: "Gagal memuat grup transaksi" };
+  }
+}
+
+export async function fetchTransactionsForDate(params: {
+  date: string;
+  page?: number;
+  search?: string;
+}): Promise<PaginatedDailyTransactions> {
+  const { error } = await requireAdmin();
+  const page = Number.isSafeInteger(params.page) ? Math.max(1, params.page ?? 1) : 1;
+  const empty = { data: [], total: 0, page, pageSize: DETAIL_PAGE_SIZE, totalPendapatanKotor: 0, totalBagianKaryawan: 0, totalPendapatanBersih: 0 };
+  if (error) return { ...empty, error };
+  const startDate = jakartaDateToUtcSql(params.date);
+  const endDate = jakartaDateToUtcSql(params.date, true);
+  const requestedSearch = params.search?.trim().slice(0, 100) ?? "";
+  const search = requestedSearch && !params.date.includes(requestedSearch) ? requestedSearch : "";
+  const searchSql = search
+    ? `AND (t.plat_nomor LIKE ? OR u.username LIKE ? OR u.nama_lengkap LIKE ? OR CONCAT(jk.kategori, ' ', jk.ukuran) LIKE ?)`
+    : "";
+  const queryParams: unknown[] = [startDate, endDate];
+  if (search) {
+    const like = `%${search}%`;
+    queryParams.push(like, like, like, like);
+  }
+
+  try {
+    const [[rows], [summaryRows]] = await Promise.all([
+      pool.query<RowDataPacket[]>(`
+        SELECT t.id, t.tanggal_waktu, t.edited_at, t.plat_nomor, t.tarif_total,
+               t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, jk.kategori, jk.ukuran,
+               u.username, u.nama_lengkap
+        FROM transaksi t
+        LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        LEFT JOIN users u ON u.id = t.kasir_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ? ${searchSql}
+        ORDER BY t.tanggal_waktu DESC
+        LIMIT ? OFFSET ?`,
+        [...queryParams, DETAIL_PAGE_SIZE, (page - 1) * DETAIL_PAGE_SIZE]
+      ),
+      pool.query<RowDataPacket[]>(`
+        SELECT COUNT(*) AS total, COALESCE(SUM(tarif_total), 0) AS kotor,
+               COALESCE(SUM(tarif_jatah_karyawan), 0) AS karyawan,
+               COALESCE(SUM(tarif_jatah_pemilik), 0) AS bersih
+        FROM transaksi t
+        LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        LEFT JOIN users u ON u.id = t.kasir_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ? ${searchSql}`,
+        queryParams
+      ),
+    ]);
+    const summary = summaryRows[0] ?? {};
+    return {
+      data: rows.map((row) => ({
+        id: String(row.id), tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
+        edited_at: row.edited_at ? utcSqlToIso(row.edited_at) : null,
+        plat_nomor: row.plat_nomor ?? null, tarif_total: Number(row.tarif_total),
+        tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan), tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik),
+        kategori: row.kategori || "-", ukuran: row.ukuran || "-",
+        kasir_nama: row.nama_lengkap || row.username || null,
+      })),
+      total: Number(summary.total), page, pageSize: DETAIL_PAGE_SIZE,
+      totalPendapatanKotor: Number(summary.kotor), totalBagianKaryawan: Number(summary.karyawan),
+      totalPendapatanBersih: Number(summary.bersih),
+    };
+  } catch (queryError) {
+    console.error("Fetch daily transactions error:", queryError);
+    return { ...empty, error: "Gagal memuat transaksi harian" };
   }
 }
 
@@ -265,7 +359,7 @@ export async function updateTransaksi(params: {
     );
 
     await logActivity({
-      actor: toActor(currentUser as any),
+      actor: toActor(currentUser),
       action: "UPDATE",
       entityType: "transaksi",
       entityId: params.id,
@@ -310,7 +404,7 @@ export async function deleteTransaksi(id: string) {
     await pool.query("DELETE FROM transaksi WHERE id = ?", [id]);
 
     await logActivity({
-      actor: toActor(currentUser as any),
+      actor: toActor(currentUser),
       action: "DELETE",
       entityType: "transaksi",
       entityId: id,

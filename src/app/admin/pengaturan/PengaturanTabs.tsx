@@ -11,8 +11,40 @@ import {
   fetchAllTransaksiForBackup,
   restoreTransaksiBackup,
   resetTransaksiData,
+  updateLoginTimeout,
   type BackupRow,
 } from "./actions"
+
+function SesiTab({ initialMinutes, onResult }: { initialMinutes: number; onResult: (msg: string, type: "success" | "error") => void }) {
+  const [minutes, setMinutes] = useState(String(initialMinutes))
+  const [pending, startTransition] = useTransition()
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    startTransition(async () => {
+      const result = await updateLoginTimeout(Number(minutes))
+      if (result.error) onResult(result.error, "error")
+      else onResult("Timeout login berhasil diperbarui", "success")
+    })
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
+      <h3 className="text-sm font-bold text-slate-700 mb-1">Timeout Login</h3>
+      <p className="text-sm text-slate-500 mb-4 max-w-2xl">
+        Admin web dan aplikasi kasir akan logout otomatis jika tidak ada aktivitas selama durasi ini. Nilai bawaan adalah 60 menit.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
+        <div className="flex-1 space-y-1.5">
+          <label htmlFor="login-timeout" className="text-sm font-medium text-slate-700">Durasi (menit)</label>
+          <Input id="login-timeout" type="number" min={5} max={10080} step={1} required value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+          <p className="text-xs text-slate-400">Minimal 5 menit, maksimal 10.080 menit (7 hari).</p>
+        </div>
+        <Button type="submit" disabled={pending}>{pending ? "Menyimpan..." : "Simpan"}</Button>
+      </form>
+    </div>
+  )
+}
 
 function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
   useState(() => {
@@ -446,8 +478,8 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
 // ---------------------------------------------------------
 // MAIN
 // ---------------------------------------------------------
-export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: string, currentUsername: string }) {
-  const [activeTab, setActiveTab] = useState<"akun" | "notifikasi" | "bahaya">("akun")
+export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinutes }: { currentNama: string, currentUsername: string, loginTimeoutMinutes: number }) {
+  const [activeTab, setActiveTab] = useState<"akun" | "sesi" | "notifikasi" | "bahaya">("akun")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const showToast = (message: string, type: "success" | "error") => setToast({ message, type })
@@ -455,6 +487,14 @@ export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: 
   return (
     <div className="space-y-6">
       <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setActiveTab("sesi")}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            activeTab === "sesi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
+          }`}
+        >
+          Sesi Login
+        </button>
         <button
           onClick={() => setActiveTab("akun")}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
@@ -482,6 +522,7 @@ export function PengaturanTabs({ currentNama, currentUsername }: { currentNama: 
       </div>
 
       {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} currentUsername={currentUsername} onResult={showToast} />}
+      {activeTab === "sesi" && <SesiTab initialMinutes={loginTimeoutMinutes} onResult={showToast} />}
       {activeTab === "notifikasi" && <NotifikasiTab onResult={showToast} />}
       {activeTab === "bahaya" && <ZonaBahayaTab onResult={showToast} />}
 

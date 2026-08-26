@@ -3,6 +3,8 @@ import { getCurrentUser } from "@/lib/authz";
 import { LogoutButton } from "@/components/LogoutButton";
 import { NotificationCenter } from "@/components/admin/NotificationCenter";
 import { SidebarNav, MobileNav } from "@/components/admin/SidebarNav";
+import { IdleLogout } from "@/components/admin/IdleLogout";
+import { getLoginTimeoutMinutes } from "@/lib/loginTimeout";
 
 export default async function AdminLayout({
   children,
@@ -16,9 +18,11 @@ export default async function AdminLayout({
   }
 
   const name = user.nama_lengkap || user.username;
+  const loginTimeoutMinutes = await getLoginTimeoutMinutes();
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans selection:bg-yellow-200">
+      <IdleLogout timeoutMinutes={loginTimeoutMinutes} />
       {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
         {/* Logo */}

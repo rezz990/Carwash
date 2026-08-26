@@ -3,8 +3,10 @@ import { authOptions } from "@/lib/auth"
 import pool from "@/lib/db"
 import type { RowDataPacket } from "mysql2"
 import { PengaturanTabs } from "./PengaturanTabs"
+import { getLoginTimeoutMinutes } from "@/lib/loginTimeout"
 
 export default async function PengaturanPage() {
+  const loginTimeoutMinutes = await getLoginTimeoutMinutes()
   const session = await getServerSession(authOptions)
   const userId = (session?.user as any)?.id
 
@@ -35,7 +37,7 @@ export default async function PengaturanPage() {
         </p>
       </div>
 
-      <PengaturanTabs currentNama={namaLengkap} currentUsername={username}/>
+      <PengaturanTabs currentNama={namaLengkap} currentUsername={username} loginTimeoutMinutes={loginTimeoutMinutes}/>
     </div>
   )
 }
