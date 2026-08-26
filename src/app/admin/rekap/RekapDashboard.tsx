@@ -7,16 +7,18 @@ import {
   fetchRekap,
   deleteTransaksi,
   fetchJenisKendaraanAktif,
+  fetchTransactionDateGroups,
+  fetchTransactionsForDate,
   type RekapHarian,
   type TransaksiDetail,
+  type TransactionDateGroup,
+  type PaginatedDailyTransactions,
 } from "./actions"
 import {
   formatRupiah,
   formatTanggalSingkat,
   formatTanggalPanjang,
-  getTanggalKey,
   todayWib,
-  addWibDays,
   startOfWeekWib,
   startOfMonthWib,
 } from "@/lib/formatters"
@@ -66,7 +68,8 @@ export function RekapDashboard({
   const [exportDateFrom, setExportDateFrom] = useState(defaultDateFrom)
   const [exportDateTo, setExportDateTo] = useState(defaultDateTo)
   const [harian, setHarian] = useState<RekapHarian[]>([])
-  const [detail, setDetail] = useState<TransaksiDetail[]>([])
+  const [transactionGroups, setTransactionGroups] = useState<TransactionDateGroup[]>([])
+  const [transactionGroupTotal, setTransactionGroupTotal] = useState(0)
   const [totals, setTotals] = useState({
     totalPendapatanKotor: 0,
     totalBagianKaryawan: 0,
@@ -79,7 +82,13 @@ export function RekapDashboard({
   const [pageHarian, setPageHarian] = useState(1)
   const [pageDetail, setPageDetail] = useState(1)
   const [searchQuery, setSearchQuery] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("")
   const [selectedTanggalKey, setSelectedTanggalKey] = useState<string | null>(null)
+  const [dailyTransactions, setDailyTransactions] = useState<PaginatedDailyTransactions | null>(null)
+  const [dailyPage, setDailyPage] = useState(1)
+  const [isDailyPending, startDailyTransition] = useTransition()
+  const groupRequestId = useRef(0)
+  const dailyRequestId = useRef(0)
   const [editTarget, setEditTarget] = useState<TransaksiDetail | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TransaksiDetail | null>(null)
   const [isDeletingPending, startDeleteTransition] = useTransition()
@@ -103,7 +112,6 @@ export function RekapDashboard({
         return
       }
       setHarian(result.harian)
-      setDetail(result.detail)
       setPageHarian(1)
       setPageDetail(1)
       setTotals({
@@ -116,7 +124,53 @@ export function RekapDashboard({
     })
   }, [appliedDateFrom, appliedDateTo])
 
+  const loadTransactionGroups = useCallback(() => {
+    const requestId = ++groupRequestId.current
+    startTransition(async () => {
+      const result = await fetchTransactionDateGroups({
+        dateFrom: appliedDateFrom, dateTo: appliedDateTo, page: pageDetail, search: appliedSearch,
+      })
+      if (requestId !== groupRequestId.current) return
+      if (result.error) {
+        setError(result.error)
+        setTransactionGroups([])
+        setTransactionGroupTotal(0)
+        return
+      }
+      setTransactionGroups(result.data)
+      setTransactionGroupTotal(result.total)
+    })
+  }, [appliedDateFrom, appliedDateTo, pageDetail, appliedSearch])
+
   useEffect(() => {
+    if (view === "detail") loadTransactionGroups()
+  }, [view, loadTransactionGroups])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPageDetail(1)
+      setAppliedSearch(searchQuery.trim())
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  const loadDailyTransactions = useCallback((date: string, page: number) => {
+    const requestId = ++dailyRequestId.current
+    startDailyTransition(async () => {
+      const result = await fetchTransactionsForDate({ date, page, search: appliedSearch })
+      if (requestId !== dailyRequestId.current) return
+      if (result.error) showToast(result.error, "error")
+      setDailyTransactions(result)
+    })
+  }, [appliedSearch])
+
+  useEffect(() => {
+    if (selectedTanggalKey) loadDailyTransactions(selectedTanggalKey, dailyPage)
+  }, [selectedTanggalKey, dailyPage, loadDailyTransactions])
+
+  useEffect(() => {
+    // Initial synchronization with server data; subsequent refreshes are explicit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData()
   }, [loadData])
 
@@ -156,88 +210,10 @@ export function RekapDashboard({
     [harian]
   )
 
-  // Detail transaksi sekarang dikelompokkan berdasarkan tanggal WIB.
-  // Search bekerja pada GROUP tanggal. Artinya admin bisa menemukan tanggal
-  // berdasarkan plat, kasir, jenis kendaraan, atau teks tanggal. Saat group
-  // dibuka, modal selalu menampilkan SEMUA transaksi pada tanggal tersebut.
-  const transaksiPerTanggal = useMemo(() => {
-    const groups = new Map<string, TransaksiDetail[]>()
-
-    for (const transaksi of detail) {
-      const tanggalKey = getTanggalKey(transaksi.tanggal_waktu)
-      const current = groups.get(tanggalKey) || []
-      current.push(transaksi)
-      groups.set(tanggalKey, current)
-    }
-
-    return Array.from(groups.entries())
-      .map(([tanggalKey, transactions]) => {
-        const sortedTransactions = [...transactions].sort(
-          (a, b) => new Date(b.tanggal_waktu).getTime() - new Date(a.tanggal_waktu).getTime()
-        )
-
-        return {
-          tanggalKey,
-          transactions: sortedTransactions,
-          totalTransaksi: sortedTransactions.length,
-          pendapatanKotor: sortedTransactions.reduce((sum, t) => sum + t.tarif_total, 0),
-          bagianKaryawan: sortedTransactions.reduce((sum, t) => sum + t.tarif_jatah_karyawan, 0),
-          pendapatanBersih: sortedTransactions.reduce((sum, t) => sum + t.tarif_jatah_pemilik, 0),
-        }
-      })
-      .sort((a, b) => b.tanggalKey.localeCompare(a.tanggalKey))
-  }, [detail])
-
-  const transaksiPerTanggalFiltered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    if (!q) return transaksiPerTanggal
-
-    return transaksiPerTanggal.filter((group) => {
-      const tanggal = formatTanggalPanjang(`${group.tanggalKey}T00:00:00+07:00`).toLowerCase()
-      const tanggalSingkat = formatTanggalSingkat(`${group.tanggalKey}T00:00:00+07:00`).toLowerCase()
-
-      return (
-        tanggal.includes(q) ||
-        tanggalSingkat.includes(q) ||
-        group.tanggalKey.includes(q) ||
-        group.transactions.some(
-          (t) =>
-            (t.plat_nomor || "").toLowerCase().includes(q) ||
-            (t.kasir_nama || "").toLowerCase().includes(q) ||
-            `${t.kategori} ${t.ukuran}`.toLowerCase().includes(q)
-        )
-      )
-    })
-  }, [transaksiPerTanggal, searchQuery])
-
-  useEffect(() => {
-    setPageDetail(1)
-  }, [searchQuery])
-
   const harianPaged = useMemo(
     () => harian.slice((pageHarian - 1) * PAGE_SIZE, pageHarian * PAGE_SIZE),
     [harian, pageHarian]
   )
-
-  const transaksiPerTanggalPaged = useMemo(
-    () =>
-      transaksiPerTanggalFiltered.slice(
-        (pageDetail - 1) * PAGE_SIZE,
-        pageDetail * PAGE_SIZE
-      ),
-    [transaksiPerTanggalFiltered, pageDetail]
-  )
-
-  const selectedTanggal = useMemo(
-    () => transaksiPerTanggal.find((group) => group.tanggalKey === selectedTanggalKey) || null,
-    [transaksiPerTanggal, selectedTanggalKey]
-  )
-
-  useEffect(() => {
-    if (selectedTanggalKey && !selectedTanggal) {
-      setSelectedTanggalKey(null)
-    }
-  }, [selectedTanggalKey, selectedTanggal])
 
   function handleApplySummaryFilter() {
     if (!dateFrom || !dateTo) {
@@ -252,6 +228,9 @@ export function RekapDashboard({
 
     setAppliedDateFrom(dateFrom)
     setAppliedDateTo(dateTo)
+    setPageDetail(1)
+    setSelectedTanggalKey(null)
+    setDailyTransactions(null)
   }
 
   // Preset tanggal cepat, selalu dihitung dari kalender WIB (bukan tanggal
@@ -271,6 +250,9 @@ export function RekapDashboard({
     setDateTo(to)
     setAppliedDateFrom(from)
     setAppliedDateTo(to)
+    setPageDetail(1)
+    setSelectedTanggalKey(null)
+    setDailyTransactions(null)
   }
 
   function handleResetExportFilter() {
@@ -286,8 +268,9 @@ export function RekapDashboard({
         showToast(result.error, "error")
       } else {
         showToast("Transaksi berhasil dihapus", "success")
-        setDetail((prev) => prev.filter((t) => t.id !== deleteTarget.id))
-        loadData() // refresh juga ringkasan harian & totals biar konsisten
+        loadData()
+        loadTransactionGroups()
+        if (selectedTanggalKey) loadDailyTransactions(selectedTanggalKey, dailyPage)
       }
       setDeleteTarget(null)
     })
@@ -508,7 +491,7 @@ export function RekapDashboard({
               )}
             </div>
             <span className="hidden sm:inline text-xs text-slate-400 whitespace-nowrap">
-              {transaksiPerTanggalFiltered.length} tanggal
+              {transactionGroupTotal} tanggal
             </span>
           </div>
         )}
@@ -516,7 +499,7 @@ export function RekapDashboard({
 
       {view === "detail" && (
         <p className="-mt-3 text-xs text-slate-400">
-          Pencarian menemukan tanggal yang memiliki transaksi sesuai kata kunci. Klik <span className="font-medium text-slate-600">Lihat transaksi</span> untuk membuka semua transaksi pada tanggal tersebut.
+          Pencarian menemukan tanggal yang memiliki transaksi sesuai kata kunci. Modal mempertahankan konteks pencarian yang sedang aktif.
         </p>
       )}
 
@@ -618,7 +601,7 @@ export function RekapDashboard({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {transaksiPerTanggalPaged.map((group) => (
+              {transactionGroups.map((group) => (
                 <tr
                   key={group.tanggalKey}
                   className="hover:bg-slate-50/70 transition-colors"
@@ -626,7 +609,7 @@ export function RekapDashboard({
                   <td className="px-4 py-3 whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => setSelectedTanggalKey(group.tanggalKey)}
+                      onClick={() => { setDailyPage(1); setDailyTransactions(null); setSelectedTanggalKey(group.tanggalKey) }}
                       className="text-left font-semibold text-slate-900 hover:text-yellow-600 transition-colors"
                       title="Lihat semua transaksi pada tanggal ini"
                     >
@@ -648,7 +631,7 @@ export function RekapDashboard({
                   <td className="px-4 py-3 text-center">
                     <button
                       type="button"
-                      onClick={() => setSelectedTanggalKey(group.tanggalKey)}
+                      onClick={() => { setDailyPage(1); setDailyTransactions(null); setSelectedTanggalKey(group.tanggalKey) }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-yellow-600 bg-yellow-50 hover:bg-yellow-100 transition-colors"
                     >
                       Lihat transaksi
@@ -659,7 +642,7 @@ export function RekapDashboard({
                   </td>
                 </tr>
               ))}
-              {transaksiPerTanggalFiltered.length === 0 && !isPending && (
+              {transactionGroups.length === 0 && !isPending && (
                 <tr>
                   <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
                     {searchQuery ? "Tidak ada hasil yang cocok" : "Tidak ada transaksi untuk periode ini"}
@@ -671,18 +654,20 @@ export function RekapDashboard({
 
           <PaginationControls
             page={pageDetail}
-            totalItems={transaksiPerTanggalFiltered.length}
+            totalItems={transactionGroupTotal}
             pageSize={PAGE_SIZE}
             onPageChange={setPageDetail}
           />
         </div>
       )}
 
-      {selectedTanggal && (
+      {selectedTanggalKey && (
         <DailyTransactionsModal
-          tanggalKey={selectedTanggal.tanggalKey}
-          transactions={selectedTanggal.transactions}
-          onClose={() => setSelectedTanggalKey(null)}
+          tanggalKey={selectedTanggalKey}
+          result={dailyTransactions}
+          isPending={isDailyPending}
+          onPageChange={setDailyPage}
+          onClose={() => { dailyRequestId.current += 1; setSelectedTanggalKey(null); setDailyTransactions(null) }}
           onEdit={(transaksi) => setEditTarget(transaksi)}
           onDelete={(transaksi) => setDeleteTarget(transaksi)}
         />
@@ -696,6 +681,8 @@ export function RekapDashboard({
           onSaved={() => {
             setEditTarget(null)
             loadData()
+            loadTransactionGroups()
+            if (selectedTanggalKey) loadDailyTransactions(selectedTanggalKey, dailyPage)
           }}
           onResult={showToast}
         />
