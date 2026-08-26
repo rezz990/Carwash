@@ -3,11 +3,7 @@
 import pool from "@/lib/db"
 import { requireAdmin } from "@/lib/authz"
 import type { RowDataPacket } from "mysql2"
-import { addJakartaDays, jakartaDateToUtcSql, todayJakarta, utcSqlToDate, utcSqlToIso, BUSINESS_TIMEZONE } from "@/lib/datetime"
-
-function getTanggalKeyJakarta(dateString: string | Date): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIMEZONE }).format(utcSqlToDate(dateString))
-}
+import { addJakartaDays, jakartaDateToUtcSql, todayJakarta, utcSqlToIso } from "@/lib/datetime"
 
 function getTodayJakarta(): string {
   return todayJakarta()
@@ -41,64 +37,53 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
   const sevenDaysAgoStr = addJakartaDays(todayStr, -6)
 
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT t.tanggal_waktu, t.tarif_total, jk.kategori, jk.ukuran
-      FROM transaksi t
-      LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
-      WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
-    `, [jakartaDateToUtcSql(sevenDaysAgoStr), jakartaDateToUtcSql(todayStr, true)])
+    const rangeStart = jakartaDateToUtcSql(sevenDaysAgoStr)
+    const rangeEnd = jakartaDateToUtcSql(todayStr, true)
+    const todayStart = jakartaDateToUtcSql(todayStr)
+    const yesterdayStart = jakartaDateToUtcSql(yesterdayStr)
 
-    let pendapatanHariIni = 0
-    let transaksiHariIni = 0
-    let pendapatanKemarin = 0
-    let totalPendapatan7Hari = 0
-    const kategoriCount = new Map<string, number>()
+    const [[summaryRows], [kategoriRows], [kasirRows], [terbaruRows]] = await Promise.all([
+      pool.query<RowDataPacket[]>(`
+        SELECT
+          COALESCE(SUM(CASE WHEN tanggal_waktu >= ? THEN tarif_total ELSE 0 END), 0) AS pendapatan_hari_ini,
+          SUM(CASE WHEN tanggal_waktu >= ? THEN 1 ELSE 0 END) AS transaksi_hari_ini,
+          COALESCE(SUM(CASE WHEN tanggal_waktu >= ? AND tanggal_waktu < ? THEN tarif_total ELSE 0 END), 0) AS pendapatan_kemarin,
+          COALESCE(SUM(tarif_total), 0) AS pendapatan_7_hari
+        FROM transaksi
+        WHERE tanggal_waktu >= ? AND tanggal_waktu <= ?
+      `, [todayStart, todayStart, yesterdayStart, todayStart, rangeStart, rangeEnd]),
+      pool.query<RowDataPacket[]>(`
+        SELECT CONCAT(jk.kategori, ' ', jk.ukuran) AS label, COUNT(*) AS jumlah
+        FROM transaksi t
+        JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
+        GROUP BY t.jenis_kendaraan_id, jk.kategori, jk.ukuran
+        ORDER BY jumlah DESC, label ASC
+        LIMIT 1
+      `, [rangeStart, rangeEnd]),
+      pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM users WHERE role = 'kasir' AND aktif = 1"),
+      pool.query<RowDataPacket[]>(`
+        SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran
+        FROM transaksi t
+        LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
+        ORDER BY t.tanggal_waktu DESC
+        LIMIT 5
+      `),
+    ])
 
-    for (const row of rows) {
-      const tglKey = getTanggalKeyJakarta(row.tanggal_waktu)
-      const tarif = Number(row.tarif_total) || 0
-
-      totalPendapatan7Hari += tarif
-
-      if (tglKey === todayStr) {
-        pendapatanHariIni += tarif
-        transaksiHariIni += 1
-      }
-      if (tglKey === yesterdayStr) {
-        pendapatanKemarin += tarif
-      }
-      if (row.kategori && row.ukuran) {
-        const label = `${row.kategori} ${row.ukuran}`
-        kategoriCount.set(label, (kategoriCount.get(label) || 0) + 1)
-      }
-    }
-
-    let kategoriTerlarisMingguIni: string | null = null
-    let maxCount = 0
-    for (const [label, count] of kategoriCount.entries()) {
-      if (count > maxCount) {
-        maxCount = count
-        kategoriTerlarisMingguIni = label
-      }
-    }
+    const summary = summaryRows[0] ?? {}
+    const pendapatanHariIni = Number(summary.pendapatan_hari_ini) || 0
+    const transaksiHariIni = Number(summary.transaksi_hari_ini) || 0
+    const pendapatanKemarin = Number(summary.pendapatan_kemarin) || 0
+    const totalPendapatan7Hari = Number(summary.pendapatan_7_hari) || 0
+    const kategoriTerlarisMingguIni = kategoriRows[0]?.label ? String(kategoriRows[0].label) : null
 
     const persenPerubahan =
       pendapatanKemarin > 0
         ? ((pendapatanHariIni - pendapatanKemarin) / pendapatanKemarin) * 100
         : null
 
-    const [kasirRows] = await pool.query<RowDataPacket[]>(`
-      SELECT COUNT(id) as count FROM users WHERE role = 'kasir' AND aktif = 1
-    `)
     const jumlahKasirAktif = kasirRows[0].count
-
-    const [terbaruRows] = await pool.query<RowDataPacket[]>(`
-      SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran
-      FROM transaksi t
-      LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
-      ORDER BY t.tanggal_waktu DESC
-      LIMIT 5
-    `)
 
     const transaksiTerbaru = terbaruRows.map((t) => ({
       id: t.id,
@@ -178,10 +163,19 @@ export async function fetchChartData(params: {
   }
 
   try {
+    const bucketExpression = mode === "harian"
+      ? "DAY(DATE_ADD(tanggal_waktu, INTERVAL 7 HOUR))"
+      : mode === "bulanan"
+        ? "MONTH(DATE_ADD(tanggal_waktu, INTERVAL 7 HOUR))"
+        : "DATE_FORMAT(DATE_ADD(tanggal_waktu, INTERVAL 7 HOUR), '%Y-%m')"
     const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT tanggal_waktu, tarif_total, tarif_jatah_pemilik
+      SELECT ${bucketExpression} AS bucket_key,
+             COALESCE(SUM(tarif_total), 0) AS pendapatan_kotor,
+             COALESCE(SUM(tarif_jatah_pemilik), 0) AS pendapatan_bersih
       FROM transaksi
       WHERE tanggal_waktu >= ? AND tanggal_waktu <= ?
+      GROUP BY bucket_key
+      ORDER BY bucket_key ASC
     `, [startDateStr, endDateStr])
 
     if (mode === "harian") {
@@ -190,12 +184,11 @@ export async function fetchChartData(params: {
       for (let d = 1; d <= lastDay; d++) buckets.set(d, { kotor: 0, bersih: 0 })
 
       for (const row of rows) {
-        const dateObj = utcSqlToDate(row.tanggal_waktu)
-        const dayNum = parseInt(dateObj.toLocaleDateString("en-CA", { timeZone: BUSINESS_TIMEZONE }).split("-")[2], 10)
+        const dayNum = Number(row.bucket_key)
         const bucket = buckets.get(dayNum)
         if (bucket) {
-          bucket.kotor += Number(row.tarif_total) || 0
-          bucket.bersih += Number(row.tarif_jatah_pemilik) || 0
+          bucket.kotor = Number(row.pendapatan_kotor) || 0
+          bucket.bersih = Number(row.pendapatan_bersih) || 0
         }
       }
 
@@ -210,12 +203,11 @@ export async function fetchChartData(params: {
       for (let m = 1; m <= 12; m++) buckets.set(m, { kotor: 0, bersih: 0 })
 
       for (const row of rows) {
-        const dateObj = utcSqlToDate(row.tanggal_waktu)
-        const monthNum = parseInt(dateObj.toLocaleDateString("en-CA", { timeZone: BUSINESS_TIMEZONE }).split("-")[1], 10)
+        const monthNum = Number(row.bucket_key)
         const bucket = buckets.get(monthNum)
         if (bucket) {
-          bucket.kotor += Number(row.tarif_total) || 0
-          bucket.bersih += Number(row.tarif_jatah_pemilik) || 0
+          bucket.kotor = Number(row.pendapatan_kotor) || 0
+          bucket.bersih = Number(row.pendapatan_bersih) || 0
         }
       }
 
@@ -240,12 +232,11 @@ export async function fetchChartData(params: {
       }
 
       for (const row of rows) {
-        const dateObj = utcSqlToDate(row.tanggal_waktu)
-        const key = dateObj.toLocaleDateString("en-CA", { timeZone: BUSINESS_TIMEZONE }).slice(0, 7) 
+        const key = String(row.bucket_key)
         const bucket = buckets.get(key)
         if (bucket) {
-          bucket.kotor += Number(row.tarif_total) || 0
-          bucket.bersih += Number(row.tarif_jatah_pemilik) || 0
+          bucket.kotor = Number(row.pendapatan_kotor) || 0
+          bucket.bersih = Number(row.pendapatan_bersih) || 0
         }
       }
 

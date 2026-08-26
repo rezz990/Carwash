@@ -58,7 +58,8 @@ export async function fetchActivityLogs(filters: ActivityLogFilters): Promise<Ac
     return { data: [], total: 0, page: 1, pageSize: ACTIVITY_LOG_PAGE_SIZE, error: authError }
   }
 
-  const page = Math.max(1, filters.page ?? 1)
+  const requestedPage = Number(filters.page)
+  const page = Number.isSafeInteger(requestedPage) ? Math.max(1, requestedPage) : 1
   const pageSize = ACTIVITY_LOG_PAGE_SIZE
   const offset = (page - 1) * pageSize
 
@@ -87,26 +88,27 @@ export async function fetchActivityLogs(filters: ActivityLogFilters): Promise<Ac
   }
   if (filters.search && filters.search.trim()) {
     where.push("(description LIKE ? OR entity_id LIKE ? OR user_name LIKE ?)")
-    const like = `%${filters.search.trim()}%`
+    const like = `%${filters.search.trim().slice(0, 100)}%`
     params.push(like, like, like)
   }
 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : ""
 
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      `SELECT id, user_id, user_name, user_role, action, entity_type, entity_id, description, old_value, new_value, ip_address, user_agent, created_at
-       FROM activity_logs
-       ${whereSql}
-       ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`,
-      [...params, pageSize, offset]
-    )
-
-    const [countRows] = await pool.query<RowDataPacket[]>(
-      `SELECT COUNT(*) as total FROM activity_logs ${whereSql}`,
-      params
-    )
+    const [[rows], [countRows]] = await Promise.all([
+      pool.query<RowDataPacket[]>(
+        `SELECT id, user_id, user_name, user_role, action, entity_type, entity_id, description, old_value, new_value, ip_address, user_agent, created_at
+         FROM activity_logs
+         ${whereSql}
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset]
+      ),
+      pool.query<RowDataPacket[]>(
+        `SELECT COUNT(*) as total FROM activity_logs ${whereSql}`,
+        params
+      ),
+    ])
 
     const data: ActivityLogRow[] = rows.map((r) => ({
       id: String(r.id),

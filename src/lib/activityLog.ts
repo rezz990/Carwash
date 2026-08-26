@@ -36,14 +36,12 @@ async function cleanupExpiredActivityLogs(): Promise<void> {
     .slice(0, 19)
     .replace("T", " ")
 
-  let affectedRows: number
-  do {
-    const [result] = await pool.query<ResultSetHeader>(
-      "DELETE FROM activity_logs WHERE created_at < ? LIMIT ?",
-      [cutoff, CLEANUP_BATCH_SIZE]
-    )
-    affectedRows = result.affectedRows
-  } while (affectedRows === CLEANUP_BATCH_SIZE)
+  // Satu batch per hari menjaga latency request tetap terukur. Batch berikutnya
+  // dibersihkan pada jadwal berikutnya tanpa loop panjang atau lock besar.
+  await pool.query<ResultSetHeader>(
+    "DELETE FROM activity_logs WHERE created_at < ? ORDER BY created_at ASC LIMIT ?",
+    [cutoff, CLEANUP_BATCH_SIZE]
+  )
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader } from "mysql2";
 import {
   verifyMobileAccessToken
 } from "@/lib/mobile/jwt";
@@ -25,18 +26,17 @@ export async function requireMobileAuth(request: Request, allowedRoles: Array<"k
   }
 
   const timeoutMinutes = await getLoginTimeoutMinutes();
-  const [sessionRows] = await pool.query<RowDataPacket[]>(
-    `SELECT id FROM mobile_sessions WHERE id = ? AND user_id = ? AND revoked_at IS NULL
-     AND expires_at > UTC_TIMESTAMP() AND last_activity_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE) LIMIT 1`,
+  const [sessionResult] = await pool.query<ResultSetHeader>(
+    `UPDATE mobile_sessions
+     SET last_activity_at = GREATEST(UTC_TIMESTAMP(6), DATE_ADD(last_activity_at, INTERVAL 1 MICROSECOND))
+     WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+       AND expires_at > UTC_TIMESTAMP()
+       AND last_activity_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? MINUTE)`,
     [token.sid, token.sub, timeoutMinutes]
   );
-  if (sessionRows.length === 0) {
+  if (sessionResult.affectedRows === 0) {
     return { error: jsonError(401, "SESSION_TIMEOUT", "Sesi berakhir karena tidak ada aktivitas") } as const;
   }
-  await pool.query(
-    "UPDATE mobile_sessions SET last_activity_at = UTC_TIMESTAMP() WHERE id = ?",
-    [token.sid]
-  );
 
   const [rows] = await pool.query<RowDataPacket[]>(
     "SELECT id, username, nama_lengkap, role, aktif FROM users WHERE id = ? LIMIT 1",
