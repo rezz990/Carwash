@@ -11,7 +11,7 @@ Android tidak terhubung langsung ke MySQL/MariaDB. Android memakai HTTPS API Nex
 ```json
 {"username":"","password":""}
 ```
-Mengembalikan `accessToken` 15 menit dan `refreshToken` 30 hari. Request protected memakai `Authorization: Bearer <accessToken>`.
+Mengembalikan `accessToken` 15 menit dan `refreshToken` dengan masa maksimum 30 hari. Request protected memakai `Authorization: Bearer <accessToken>`. Sesi otomatis berakhir jika tidak ada request API selama timeout yang diatur admin (default 60 menit).
 
 ### POST `/api/mobile/auth/refresh`
 ```json
@@ -53,7 +53,7 @@ Detail transaksi milik kasir yang sedang login.
 {"success":false,"error":{"code":"INVALID_CREDENTIALS","message":"Username atau password salah"}}
 ```
 
-Kode utama: `UNAUTHORIZED`, `INVALID_TOKEN`, `INVALID_REFRESH_TOKEN`, `ACCOUNT_DISABLED`, `ROLE_NOT_ALLOWED`, `INVALID_CREDENTIALS`, `INVALID_INPUT`, `INVALID_PLATE`, `VEHICLE_NOT_FOUND`, `DUPLICATE_PLATE`, `INVALID_TARIFF_CONFIG`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`, `INTERNAL_ERROR`.
+Kode utama: `UNAUTHORIZED`, `INVALID_TOKEN`, `INVALID_REFRESH_TOKEN`, `SESSION_TIMEOUT`, `ACCOUNT_DISABLED`, `ROLE_NOT_ALLOWED`, `INVALID_CREDENTIALS`, `INVALID_INPUT`, `INVALID_PLATE`, `VEHICLE_NOT_FOUND`, `DUPLICATE_PLATE`, `INVALID_TARIFF_CONFIG`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`, `INTERNAL_ERROR`.
 
 ## Security
 Jangan pernah memasukkan `DATABASE_URL`, password MySQL, `NEXTAUTH_SECRET`, atau `MOBILE_API_SECRET` ke APK. Android hanya membutuhkan URL API. Production wajib HTTPS.

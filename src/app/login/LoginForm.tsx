@@ -38,6 +38,7 @@ export function LoginForm() {
         }
         addToast("Gagal masuk. Periksa kredensial Anda.", "error")
       } else {
+        localStorage.setItem("carwash.admin.lastActivity", String(Date.now()))
         addToast("Berhasil masuk! Selamat datang kembali.", "success")
         router.push("/admin")
         router.refresh()
