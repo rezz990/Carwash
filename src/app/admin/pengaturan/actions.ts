@@ -9,10 +9,35 @@ import bcrypt from "bcryptjs"
 import type { RowDataPacket } from "mysql2"
 import { utcSqlToIso } from "@/lib/datetime"
 import { logActivity, type ActivityActor } from "@/lib/activityLog"
+import { MAX_LOGIN_TIMEOUT_MINUTES, MIN_LOGIN_TIMEOUT_MINUTES } from "@/lib/loginTimeout"
 
 function toActor(user: { id: string; username: string; role: string } | null): ActivityActor {
   if (!user) return null
   return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" }
+}
+
+export async function updateLoginTimeout(minutes: number) {
+  const { error, user } = await requireAdmin()
+  if (error || !user) return { error: error ?? "Anda harus login" }
+  if (!Number.isInteger(minutes) || minutes < MIN_LOGIN_TIMEOUT_MINUTES || minutes > MAX_LOGIN_TIMEOUT_MINUTES) {
+    return { error: "Timeout harus antara 5 menit dan 7 hari" }
+  }
+
+  await pool.query(
+    `INSERT INTO app_settings (setting_key, setting_value, updated_at) VALUES (?, ?, UTC_TIMESTAMP())
+     ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = UTC_TIMESTAMP()`,
+    ["login_timeout_minutes", String(minutes)]
+  )
+  await logActivity({
+    actor: toActor(user),
+    action: "UPDATE",
+    entityType: "pengaturan",
+    entityId: null,
+    description: `Mengubah timeout login menjadi ${minutes} menit`,
+    newValue: { login_timeout_minutes: minutes },
+  })
+  revalidatePath("/admin", "layout")
+  return { success: true }
 }
 
 // ---------------------------------------------------------
