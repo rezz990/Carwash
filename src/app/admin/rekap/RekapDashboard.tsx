@@ -102,6 +102,9 @@ export function RekapDashboard({
   const [isPending, startTransition] = useTransition()
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [showMobileFilter, setShowMobileFilter] = useState(false)
+  const [showMobileExport, setShowMobileExport] = useState(false)
+  const resultsRef = useRef<HTMLDivElement>(null)
 
   const loadData = useCallback(() => {
     setError(null)
@@ -231,6 +234,8 @@ export function RekapDashboard({
     setPageDetail(1)
     setSelectedTanggalKey(null)
     setDailyTransactions(null)
+    setShowMobileFilter(false)
+    window.setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
   }
 
   // Preset tanggal cepat, selalu dihitung dari kalender WIB (bukan tanggal
@@ -253,6 +258,7 @@ export function RekapDashboard({
     setPageDetail(1)
     setSelectedTanggalKey(null)
     setDailyTransactions(null)
+    setShowMobileFilter(false)
   }
 
   function handleResetExportFilter() {
@@ -346,15 +352,38 @@ export function RekapDashboard({
 
   return (
     <div className="space-y-6">
+      <div className="md:hidden rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Periode aktif</p>
+        <p className="mt-1 text-sm font-bold text-slate-900">
+          {formatTanggalPanjang(appliedDateFrom)} – {formatTanggalPanjang(appliedDateTo)}
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Button className="h-11" onClick={() => setShowMobileFilter(true)}>Filter Data</Button>
+          <Button variant="outline" className="h-11" onClick={() => setShowMobileExport(true)}>Export</Button>
+        </div>
+      </div>
+
+      {(showMobileFilter || showMobileExport) && (
+        <button
+          type="button"
+          aria-label="Tutup panel"
+          className="fixed inset-0 z-40 bg-slate-950/40 md:hidden"
+          onClick={() => { setShowMobileFilter(false); setShowMobileExport(false) }}
+        />
+      )}
+
       {/* Filter Ringkasan + Export dipisahkan supaya masing-masing punya periode sendiri. */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
+        <div className={`${showMobileFilter ? "fixed inset-x-3 bottom-3 z-50 block max-h-[85vh] overflow-y-auto rounded-2xl" : "hidden"} md:static md:block md:max-h-none md:overflow-visible bg-white rounded-xl border border-slate-200/80 shadow-xl md:shadow-sm p-5`}>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Filter Ringkasan</h2>
               <p className="text-xs text-slate-500 mt-0.5">Mengatur kartu statistik, Ringkasan Harian, dan Detail Transaksi.</p>
             </div>
-            <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-full whitespace-nowrap">WIB</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-full whitespace-nowrap">WIB</span>
+              <button type="button" onClick={() => setShowMobileFilter(false)} className="md:hidden h-9 w-9 rounded-lg bg-slate-100 text-slate-600" aria-label="Tutup filter">×</button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 mb-3">
             <button
@@ -388,7 +417,7 @@ export function RekapDashboard({
               <label className="text-xs font-medium text-slate-600">Sampai Tanggal</label>
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="h-10" />
             </div>
-            <Button onClick={handleApplySummaryFilter} disabled={isPending} className="h-10">
+            <Button onClick={handleApplySummaryFilter} disabled={isPending} className="h-11 md:h-10 w-full md:w-auto">
               {isPending ? "Memuat..." : "Terapkan"}
             </Button>
           </div>
@@ -397,13 +426,16 @@ export function RekapDashboard({
           </p>
         </div>
 
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-5">
+        <div className={`${showMobileExport ? "fixed inset-x-3 bottom-3 z-50 block max-h-[85vh] overflow-y-auto rounded-2xl" : "hidden"} md:static md:block md:max-h-none md:overflow-visible bg-white rounded-xl border border-slate-200/80 shadow-xl md:shadow-sm p-5`}>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Export Laporan</h2>
               <p className="text-xs text-slate-500 mt-0.5">Periode export tidak memengaruhi data dashboard.</p>
             </div>
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap">Terpisah</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full whitespace-nowrap">Terpisah</span>
+              <button type="button" onClick={() => setShowMobileExport(false)} className="md:hidden h-9 w-9 rounded-lg bg-slate-100 text-slate-600" aria-label="Tutup export">×</button>
+            </div>
           </div>
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5 flex-1 min-w-[150px]">
@@ -414,11 +446,11 @@ export function RekapDashboard({
               <label className="text-xs font-medium text-slate-600">Sampai Tanggal</label>
               <Input type="date" value={exportDateTo} onChange={(e) => setExportDateTo(e.target.value)} className="h-10" />
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleExportExcel} disabled={exportingExcel} className="h-10">
+            <div className="grid grid-cols-2 gap-2 w-full md:w-auto">
+              <Button variant="outline" onClick={handleExportExcel} disabled={exportingExcel} className="h-11 md:h-10">
                 {exportingExcel ? "Menyiapkan..." : "Excel"}
               </Button>
-              <Button variant="outline" onClick={handleExportPdf} disabled={exportingPdf} className="h-10">
+              <Button variant="outline" onClick={handleExportPdf} disabled={exportingPdf} className="h-11 md:h-10">
                 {exportingPdf ? "Menyiapkan..." : "PDF"}
               </Button>
             </div>
@@ -435,7 +467,7 @@ export function RekapDashboard({
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div ref={resultsRef} className="grid scroll-mt-20 grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <SummaryCard label="Pendapatan Kotor" value={formatRupiah(totals.totalPendapatanKotor)} accent="slate" />
         <SummaryCard label="Pendapatan Bersih" value={formatRupiah(totals.totalPendapatanBersih)} accent="indigo" />
         <SummaryCard label="Total Transaksi" value={totals.totalTransaksi.toString()} accent="emerald" />
@@ -443,11 +475,11 @@ export function RekapDashboard({
       </div>
 
       {/* Toggle view + Search untuk Detail */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-2">
+      <div className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center justify-between gap-3 bg-slate-50/95 px-1 py-2 backdrop-blur md:static md:mx-0 md:bg-transparent md:p-0">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           <button
             onClick={() => setView("harian")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
               view === "harian" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
             }`}
           >
@@ -455,7 +487,7 @@ export function RekapDashboard({
           </button>
           <button
             onClick={() => setView("detail")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+            className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
               view === "detail" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
             }`}
           >
@@ -505,7 +537,29 @@ export function RekapDashboard({
 
       {/* Tabel Ringkasan Harian */}
       {view === "harian" && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
+        <>
+        <div className="space-y-3 md:hidden">
+          {harianPaged.map((h) => (
+            <article key={h.tanggal} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <p className="font-bold text-slate-900">{formatTanggalPanjang(h.tanggal)}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{h.hari} · {h.totalMotor + h.totalMobil} kendaraan</p>
+                </div>
+                <span className="rounded-lg bg-yellow-50 px-2.5 py-1 text-xs font-bold text-yellow-700">{formatRupiah(h.pendapatanKotor)}</span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div><dt className="text-xs text-slate-500">Motor</dt><dd className="font-bold text-slate-800">{h.totalMotor}</dd></div>
+                <div><dt className="text-xs text-slate-500">Mobil</dt><dd className="font-bold text-slate-800">{h.totalMobil}</dd></div>
+                <div><dt className="text-xs text-slate-500">Bagian karyawan</dt><dd className="font-semibold text-amber-600">{formatRupiah(h.bagianKaryawan)}</dd></div>
+                <div><dt className="text-xs text-slate-500">Pendapatan bersih</dt><dd className="font-semibold text-emerald-600">{formatRupiah(h.pendapatanBersih)}</dd></div>
+              </dl>
+            </article>
+          ))}
+          {harian.length === 0 && !isPending && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">Tidak ada data untuk periode ini</div>}
+          <PaginationControls page={pageHarian} totalItems={harian.length} pageSize={PAGE_SIZE} onPageChange={setPageHarian} />
+        </div>
+        <div className="hidden md:block bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -584,11 +638,38 @@ export function RekapDashboard({
             onPageChange={setPageHarian}
           />
         </div>
+        </>
       )}
 
       {/* Tabel Detail Transaksi - 1 baris per tanggal */}
       {view === "detail" && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
+        <>
+        <div className="space-y-3 md:hidden">
+          {transactionGroups.map((group) => (
+            <button
+              key={group.tanggalKey}
+              type="button"
+              onClick={() => { setDailyPage(1); setDailyTransactions(null); setSelectedTanggalKey(group.tanggalKey) }}
+              className="block w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm active:bg-slate-50"
+            >
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <p className="font-bold text-slate-900">{formatTanggalPanjang(`${group.tanggalKey}T00:00:00+07:00`)}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{group.totalTransaksi} transaksi</p>
+                </div>
+                <span className="text-xl text-slate-400">›</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div><p className="text-[11px] text-slate-500">Kotor</p><p className="mt-0.5 text-xs font-bold text-slate-900">{formatRupiah(group.pendapatanKotor)}</p></div>
+                <div><p className="text-[11px] text-slate-500">Karyawan</p><p className="mt-0.5 text-xs font-bold text-amber-600">{formatRupiah(group.bagianKaryawan)}</p></div>
+                <div><p className="text-[11px] text-slate-500">Bersih</p><p className="mt-0.5 text-xs font-bold text-emerald-600">{formatRupiah(group.pendapatanBersih)}</p></div>
+              </div>
+            </button>
+          ))}
+          {transactionGroups.length === 0 && !isPending && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-400">{searchQuery ? "Tidak ada hasil yang cocok" : "Tidak ada transaksi untuk periode ini"}</div>}
+          <PaginationControls page={pageDetail} totalItems={transactionGroupTotal} pageSize={PAGE_SIZE} onPageChange={setPageDetail} />
+        </div>
+        <div className="hidden md:block bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
@@ -659,6 +740,7 @@ export function RekapDashboard({
             onPageChange={setPageDetail}
           />
         </div>
+        </>
       )}
 
       {selectedTanggalKey && (

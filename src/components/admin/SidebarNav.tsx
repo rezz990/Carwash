@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEffect, useRef, useState } from "react"
 import { cn } from "@/utils/cn"
 import { motion } from "framer-motion"
 
@@ -135,43 +136,70 @@ export function SidebarNav() {
   )
 }
 
-/** Mobile nav — horizontal scrollable pill buttons */
+/** Mobile nav — menu ringkas agar konten tidak terdorong dua baris navigasi. */
 export function MobileNav() {
   const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false)
+    }
+    document.addEventListener("mousedown", close)
+    document.addEventListener("keydown", closeOnEscape)
+    return () => {
+      document.removeEventListener("mousedown", close)
+      document.removeEventListener("keydown", closeOnEscape)
+    }
+  }, [open])
 
   function isActive(item: NavItem) {
     if (item.exact) return pathname === item.href
     return pathname === item.href || pathname.startsWith(item.href + "/")
   }
 
-  const labelShort: Record<string, string> = {
-    "/admin": "Overview",
-    "/admin/tarif": "Tarif",
-    "/admin/users": "User",
-    "/admin/rekap": "Rekap",
-    "/admin/pengaturan": "Setting",
-    "/admin/log-aktivitas": "Log",
-  }
-
   return (
-    <div className="flex items-center gap-1 min-w-max">
-      {navItems.map((item) => {
-        const active = isActive(item)
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "relative px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all duration-200",
-              active
-                ? "bg-yellow-400 text-slate-900 shadow-sm shadow-yellow-400/30"
-                : "text-slate-600 hover:bg-yellow-50 hover:text-yellow-600"
-            )}
-          >
-            {labelShort[item.href] ?? item.label}
-          </Link>
-        )
-      })}
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 hover:bg-slate-100"
+        aria-label="Buka menu navigasi"
+        aria-expanded={open}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round">
+          <circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-12 z-50 w-64 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl">
+          <p className="px-3 pb-2 pt-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Navigasi</p>
+          {navItems.map((item) => {
+            const active = isActive(item)
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
+                  active ? "bg-yellow-400 text-slate-900" : "text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                <span className={active ? "text-slate-900" : "text-slate-400"}>{item.icon}</span>
+                <span>{item.label}</span>
+                {active && <span className="ml-auto h-2 w-2 rounded-full bg-slate-900" />}
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
