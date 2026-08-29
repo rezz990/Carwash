@@ -161,7 +161,7 @@ export async function changeOwnPassword(params: {
 }
 
 // ---------------------------------------------------------
-// ZONA BAHAYA: Backup, Restore, Reset
+// BACKUP & PEMULIHAN
 // ---------------------------------------------------------
 
 export type BackupRow = {
@@ -212,7 +212,6 @@ export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[];
 
 export async function restoreTransaksiBackup(params: {
   rows: BackupRow[]
-  mode: "append" | "replace"
 }) {
   const { error: authError, user: currentUser } = await requireAdmin()
   if (authError) return { error: authError }
@@ -237,10 +236,6 @@ export async function restoreTransaksiBackup(params: {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-
-    if (params.mode === "replace") {
-      await connection.query("DELETE FROM transaksi")
-    }
 
     const CHUNK_SIZE = 500
     for (let i = 0; i < params.rows.length; i += CHUNK_SIZE) {
@@ -273,7 +268,7 @@ export async function restoreTransaksiBackup(params: {
     await connection.rollback()
     console.error("Restore insert error:", error)
     return {
-      error: `Gagal restore data. Kemungkinan ada jenis_kendaraan_id atau kasir_id yang sudah tidak ada di database. ${params.mode === "replace" ? "PERHATIAN: data lama mungkin sudah terhapus." : ""}`,
+      error: "Gagal restore data. Kemungkinan ada jenis_kendaraan_id atau kasir_id yang sudah tidak ada di database.",
     }
   } finally {
     connection.release()
@@ -283,38 +278,10 @@ export async function restoreTransaksiBackup(params: {
     actor: toActor(currentUser as any),
     action: "CREATE",
     entityType: "laporan",
-    description: `Restore backup transaksi, mode "${params.mode}" (${params.rows.length} baris)${params.mode === "replace" ? " - data transaksi lama DIHAPUS dulu" : ""}`,
-    newValue: { mode: params.mode, jumlah_baris: params.rows.length },
+    description: `Restore backup transaksi dengan mode aman/append (${params.rows.length} baris)`,
+    newValue: { mode: "append", jumlah_baris: params.rows.length },
   })
 
   revalidatePath("/admin", "layout")
   return { success: true, jumlahRestored: params.rows.length }
-}
-
-export async function resetTransaksiData() {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
-
-  try {
-    const [countRows] = await pool.query<RowDataPacket[]>(
-      "SELECT COUNT(*) as count FROM transaksi"
-    )
-    const jumlahTerhapus = Number(countRows[0]?.count ?? 0)
-
-    await pool.query("DELETE FROM transaksi")
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "DELETE",
-      entityType: "laporan",
-      description: `MENGHAPUS SEMUA data transaksi (${jumlahTerhapus} baris) - aksi zona bahaya`,
-      oldValue: { jumlah_baris: jumlahTerhapus },
-    })
-  } catch (error) {
-    console.error("Reset data error:", error)
-    return { error: "Gagal menghapus data transaksi" }
-  }
-
-  revalidatePath("/admin", "layout")
-  return { success: true }
 }

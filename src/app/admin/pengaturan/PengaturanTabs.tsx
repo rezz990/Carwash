@@ -10,7 +10,6 @@ import {
   changeOwnPassword,
   fetchAllTransaksiForBackup,
   restoreTransaksiBackup,
-  resetTransaksiData,
   updateLoginTimeout,
   type BackupRow,
 } from "./actions"
@@ -257,19 +256,14 @@ function NotifikasiTab({ onResult }: { onResult: (msg: string, type: "success" |
 }
 
 // ---------------------------------------------------------
-// TAB: ZONA BAHAYA
+// TAB: BACKUP & PEMULIHAN
 // ---------------------------------------------------------
-function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" | "error") => void }) {
+function BackupPemulihanTab({ onResult }: { onResult: (msg: string, type: "success" | "error") => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isExporting, setIsExporting] = useState(false)
   const [restoreFile, setRestoreFile] = useState<File | null>(null)
-  const [restoreMode, setRestoreMode] = useState<"append" | "replace">("append")
   const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
   const [isRestoring, startRestoreTransition] = useTransition()
-
-  const [showResetConfirm, setShowResetConfirm] = useState(false)
-  const [resetConfirmText, setResetConfirmText] = useState("")
-  const [isResetting, startResetTransition] = useTransition()
 
   async function handleExportBackup() {
     setIsExporting(true)
@@ -307,7 +301,7 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
       try {
         const text = await restoreFile.text()
         const rows: BackupRow[] = JSON.parse(text)
-        const result = await restoreTransaksiBackup({ rows, mode: restoreMode })
+        const result = await restoreTransaksiBackup({ rows })
         if (result.error) {
           onResult(result.error, "error")
         } else {
@@ -322,25 +316,12 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
     })
   }
 
-  function handleReset() {
-    startResetTransition(async () => {
-      const result = await resetTransaksiData()
-      if (result.error) {
-        onResult(result.error, "error")
-      } else {
-        onResult("Semua data transaksi berhasil dihapus", "success")
-      }
-      setShowResetConfirm(false)
-      setResetConfirmText("")
-    })
-  }
-
   return (
     <div className="space-y-6">
       {/* Backup */}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-700 mb-1">Export Backup</h3>
-        <p className="text-sm text-slate-500 mb-4">Download semua data transaksi sebagai file JSON. Simpan file ini di tempat aman sebelum melakukan reset atau perubahan besar.</p>
+        <p className="text-sm text-slate-500 mb-4">Download semua data transaksi sebagai file JSON dan simpan file ini di tempat aman.</p>
         <Button variant="outline" onClick={handleExportBackup} disabled={isExporting}>
           {isExporting ? "Menyiapkan..." : "Download Backup"}
         </Button>
@@ -362,21 +343,6 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
         </Button>
       </div>
 
-      {/* Reset - danger zone visual */}
-      <div className="bg-red-50/50 rounded-xl border border-red-200 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-red-700 mb-1">Reset Data Transaksi</h3>
-        <p className="text-sm text-red-600/80 mb-4">
-          Menghapus SEMUA data transaksi secara permanen. Data jenis kendaraan dan akun user tidak terpengaruh.
-          Pastikan sudah export backup sebelum melakukan ini.
-        </p>
-        <Button
-          className="bg-red-600 hover:bg-red-700 text-white"
-          onClick={() => setShowResetConfirm(true)}
-        >
-          Reset Semua Data Transaksi
-        </Button>
-      </div>
-
       {/* Modal konfirmasi restore */}
       {showRestoreConfirm && restoreFile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -386,24 +352,7 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
               </div>
               <h2 className="text-lg font-bold text-slate-900">Restore dari &quot;{restoreFile.name}&quot;</h2>
-              <p className="text-sm text-slate-500 mt-2">Pilih cara restore-nya:</p>
-
-              <div className="space-y-2 mt-4">
-                <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
-                  <input type="radio" checked={restoreMode === "append"} onChange={() => setRestoreMode("append")} className="mt-1" />
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Tambahkan ke data yang ada</p>
-                    <p className="text-xs text-slate-500">Data dari backup ditambahkan, data yang sudah ada tetap aman.</p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-3 p-3 rounded-xl border border-red-200 bg-red-50/50 cursor-pointer hover:bg-red-50">
-                  <input type="radio" checked={restoreMode === "replace"} onChange={() => setRestoreMode("replace")} className="mt-1" />
-                  <div>
-                    <p className="text-sm font-semibold text-red-700">Timpa (hapus data lama dulu)</p>
-                    <p className="text-xs text-red-600/80">Semua data transaksi saat ini akan DIHAPUS PERMANEN sebelum data backup dimasukkan.</p>
-                  </div>
-                </label>
-              </div>
+              <p className="text-sm text-slate-500 mt-2">Data backup akan ditambahkan dengan aman. Transaksi yang sudah ada tidak akan dihapus atau ditimpa.</p>
             </div>
             <div className="px-6 pb-6 flex gap-3">
               <Button
@@ -417,7 +366,7 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
               </Button>
               <Button
                 type="button"
-                className={`flex-1 ${restoreMode === "replace" ? "bg-red-600 hover:bg-red-700 text-white" : ""}`}
+                className="flex-1"
                 onClick={handleRestore}
                 disabled={isRestoring}
               >
@@ -428,49 +377,6 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
         </div>
       )}
 
-      {/* Modal konfirmasi reset - wajib ketik "HAPUS" */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-            <div className="px-6 py-5">
-              <div className="w-11 h-11 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-              </div>
-              <h2 className="text-lg font-bold text-slate-900">Hapus semua data transaksi?</h2>
-              <p className="text-sm text-slate-500 mt-2">
-                Tindakan ini <span className="font-semibold text-red-600">permanen dan tidak bisa dibatalkan</span>.
-                Ketik <span className="font-mono font-bold text-slate-900">HAPUS</span> untuk konfirmasi.
-              </p>
-              <Input
-                value={resetConfirmText}
-                onChange={(e) => setResetConfirmText(e.target.value)}
-                placeholder="Ketik HAPUS"
-                className="mt-3"
-                autoFocus
-              />
-            </div>
-            <div className="px-6 pb-6 flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => { setShowResetConfirm(false); setResetConfirmText("") }}
-                disabled={isResetting}
-              >
-                Batal
-              </Button>
-              <Button
-                type="button"
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                onClick={handleReset}
-                disabled={isResetting || resetConfirmText !== "HAPUS"}
-              >
-                {isResetting ? "Menghapus..." : "Hapus Permanen"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -479,7 +385,7 @@ function ZonaBahayaTab({ onResult }: { onResult: (msg: string, type: "success" |
 // MAIN
 // ---------------------------------------------------------
 export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinutes }: { currentNama: string, currentUsername: string, loginTimeoutMinutes: number }) {
-  const [activeTab, setActiveTab] = useState<"akun" | "sesi" | "notifikasi" | "bahaya">("akun")
+  const [activeTab, setActiveTab] = useState<"akun" | "sesi" | "notifikasi" | "backup">("akun")
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
 
   const showToast = (message: string, type: "success" | "error") => setToast({ message, type })
@@ -512,19 +418,19 @@ export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinut
           Notifikasi
         </button>
         <button
-          onClick={() => setActiveTab("bahaya")}
+          onClick={() => setActiveTab("backup")}
           className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-            activeTab === "bahaya" ? "bg-red-600 text-white" : "bg-white text-red-600 border border-red-200"
+            activeTab === "backup" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
-          Zona Bahaya
+          Backup & Pemulihan
         </button>
       </div>
 
       {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} currentUsername={currentUsername} onResult={showToast} />}
       {activeTab === "sesi" && <SesiTab initialMinutes={loginTimeoutMinutes} onResult={showToast} />}
       {activeTab === "notifikasi" && <NotifikasiTab onResult={showToast} />}
-      {activeTab === "bahaya" && <ZonaBahayaTab onResult={showToast} />}
+      {activeTab === "backup" && <BackupPemulihanTab onResult={showToast} />}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
