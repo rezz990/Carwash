@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/toast/ToastProvider";
 import "./globals.css";
 import { MotionConfig } from "@/components/animation/MotionConfig";
+import { AuthSessionProvider } from "@/components/auth/AuthSessionProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -32,7 +33,9 @@ export default function RootLayout({
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
         <MotionConfig>
-          <ToastProvider>{children}</ToastProvider>
+          <AuthSessionProvider>
+            <ToastProvider>{children}</ToastProvider>
+          </AuthSessionProvider>
         </MotionConfig>
       </body>
     </html>
