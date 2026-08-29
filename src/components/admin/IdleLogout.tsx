@@ -45,7 +45,6 @@ export function IdleLogout({ timeoutMinutes }: { timeoutMinutes: number }) {
     logoutIfIdle()
     if (!loggingOut) {
       localStorage.setItem(STORAGE_KEY, String(lastActivity))
-      void update({ lastActivity })
     }
     for (const event of EVENTS) window.addEventListener(event, recordActivity, { passive: true })
     window.addEventListener("focus", logoutIfIdle)
