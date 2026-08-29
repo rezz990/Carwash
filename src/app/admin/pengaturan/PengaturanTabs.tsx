@@ -129,21 +129,21 @@ function AkunSayaTab({
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
         <h3 className="text-sm font-bold text-slate-700 mb-4">Nama Lengkap</h3>
-        <form onSubmit={handleSaveNama} className="flex gap-3 items-end max-w-md">
+        <form onSubmit={handleSaveNama} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
           <div className="flex-1 space-y-1.5">
             <Input value={namaLengkap} onChange={(e) => setNamaLengkap(e.target.value)} placeholder="Nama lengkap Anda" />
           </div>
-          <Button type="submit" disabled={namaPending}>
+          <Button type="submit" disabled={namaPending} className="h-11 sm:h-auto w-full sm:w-auto">
             {namaPending ? "Menyimpan..." : "Simpan"}
           </Button>
         </form>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
   <h3 className="text-sm font-bold text-slate-700 mb-4">Username</h3>
-  <form onSubmit={handleSaveUsername} className="flex gap-3 items-end max-w-md">
+  <form onSubmit={handleSaveUsername} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
     <div className="flex-1 space-y-1.5">
       <Input
         value={username}
@@ -152,13 +152,13 @@ function AkunSayaTab({
         autoComplete="username"
       />
     </div>
-    <Button type="submit" disabled={usernamePending}>
+    <Button type="submit" disabled={usernamePending} className="h-11 sm:h-auto w-full sm:w-auto">
       {usernamePending ? "Menyimpan..." : "Simpan"}
     </Button>
   </form>
 </div>
 
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
+      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
         <h3 className="text-sm font-bold text-slate-700 mb-4">Ubah Password</h3>
         <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
           {passwordError && (
@@ -486,10 +486,10 @@ export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinut
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 flex-wrap">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         <button
           onClick={() => setActiveTab("sesi")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
             activeTab === "sesi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
@@ -497,7 +497,7 @@ export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinut
         </button>
         <button
           onClick={() => setActiveTab("akun")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
             activeTab === "akun" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
@@ -505,7 +505,7 @@ export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinut
         </button>
         <button
           onClick={() => setActiveTab("notifikasi")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
             activeTab === "notifikasi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
           }`}
         >
@@ -513,7 +513,7 @@ export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinut
         </button>
         <button
           onClick={() => setActiveTab("bahaya")}
-          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
             activeTab === "bahaya" ? "bg-red-600 text-white" : "bg-white text-red-600 border border-red-200"
           }`}
         >
