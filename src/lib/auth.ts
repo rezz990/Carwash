@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import pool from "@/lib/db";
 import type { RowDataPacket } from "mysql2";
 import { logActivity } from "@/lib/activityLog";
+import { getLoginTimeoutMinutes } from "@/lib/loginTimeout";
 
 export const authOptions: NextAuthOptions = {
   session: {
@@ -74,19 +75,29 @@ export const authOptions: NextAuthOptions = {
           description: `Login berhasil sebagai "${user.username}"`,
         });
 
+        const idleTimeoutMinutes = await getLoginTimeoutMinutes();
+
         return {
           id: user.id,
           name: user.username,
           role: user.role,
+          idleTimeoutMinutes,
         };
       },
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.lastActivity = Date.now();
+        token.idleTimeoutMinutes = Number((user as any).idleTimeoutMinutes) || 60;
+      } else if (trigger === "update") {
+        // Waktu aktivitas selalu dibuat server. Jangan mempercayai timestamp
+        // dari browser karena nilai tersebut dapat dimanipulasi.
+        token.lastActivity = Date.now();
+        token.idleTimeoutMinutes = await getLoginTimeoutMinutes();
       }
       return token;
     },
@@ -95,6 +106,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
       }
+      (session as any).lastActivity = token.lastActivity;
+      (session as any).idleTimeoutMinutes = token.idleTimeoutMinutes;
       return session;
     },
   },
