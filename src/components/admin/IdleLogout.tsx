@@ -28,10 +28,22 @@ export function IdleLogout({ timeoutMinutes }: { timeoutMinutes: number }) {
   useEffect(() => {
     const initial = snapshot()
     if (!sessionId || !initial?.lastActivity) return
-    if (isSessionExpired(initial)) { logout(); return }
+    const browserNow = Date.now()
+    if (typeof initial.lastActivity !== "number" || !Number.isFinite(initial.lastActivity)) {
+      logout()
+      return
+    }
+    // lastActivity dibuat oleh server, sedangkan pengecekan idle berjalan di
+    // perangkat pengguna. Normalisasi perbedaan jam agar perangkat yang sedikit
+    // tertinggal tidak langsung dianggap timeout sesaat setelah login.
+    const initialLastActivity = Math.min(initial.lastActivity, browserNow)
+    if (isSessionExpired({ ...initial, lastActivity: initialLastActivity }, browserNow)) {
+      logout()
+      return
+    }
     const key = `carwash.admin.activity:${sessionId}`
-    let lastActivity = initial.lastActivity
-    let lastSyncedActivity = initial.lastActivity
+    let lastActivity = initialLastActivity
+    let lastSyncedActivity = initialLastActivity
     let lastRequest = 0
     let lastPersisted = 0
     let inFlight = false
