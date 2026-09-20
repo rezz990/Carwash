@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
+import type { PoolConnection } from "mysql2/promise";
 
 import pool from "@/lib/db";
 import {
@@ -26,10 +27,86 @@ import {
 
 import { requireAdmin } from "@/lib/authz";
 import { logActivity } from "@/lib/activityLog";
+import {
+  hasClientTransactionId,
+  isDuplicateKeyError,
+  parseClientTransactionId,
+} from "@/lib/mobile/idempotency";
 
 export const dynamic = "force-dynamic";
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
+
+interface MobileTransactionRow extends RowDataPacket {
+  id: string;
+  tanggal_waktu: string;
+  jenis_kendaraan_id: string;
+  plat_nomor: string;
+  tarif_total: string | number;
+  tarif_jatah_karyawan: string | number;
+  tarif_jatah_pemilik: string | number;
+  kasir_id: string;
+  kategori: string;
+  ukuran: string;
+}
+
+async function findMobileTransaction(
+  connection: PoolConnection,
+  id: string,
+  kasirId: string,
+): Promise<MobileTransactionRow | null> {
+  const [rows] = await connection.query<MobileTransactionRow[]>(
+    `SELECT
+      t.id,
+      t.tanggal_waktu,
+      t.jenis_kendaraan_id,
+      t.plat_nomor,
+      t.tarif_total,
+      t.tarif_jatah_karyawan,
+      t.tarif_jatah_pemilik,
+      t.kasir_id,
+      j.kategori,
+      j.ukuran
+    FROM transaksi t
+    JOIN jenis_kendaraan j ON j.id = t.jenis_kendaraan_id
+    WHERE t.id = ? AND t.kasir_id = ?
+    LIMIT 1`,
+    [id, kasirId],
+  );
+
+  return rows[0] ?? null;
+}
+
+function isSameTransactionRequest(
+  existing: MobileTransactionRow,
+  jenisKendaraanId: string,
+  plate: string,
+) {
+  return (
+    String(existing.jenis_kendaraan_id) === jenisKendaraanId &&
+    normalizePlate(existing.plat_nomor) === plate
+  );
+}
+
+function existingTransactionPayload(
+  existing: MobileTransactionRow,
+  user: { id: string; username: string },
+) {
+  return {
+    id: String(existing.id),
+    tanggalWaktu: utcSqlToIso(existing.tanggal_waktu),
+    platNomor: String(existing.plat_nomor),
+    jenisKendaraan: {
+      id: String(existing.jenis_kendaraan_id),
+      kategori: String(existing.kategori),
+      ukuran: String(existing.ukuran),
+    },
+    tarif: Number(existing.tarif_total),
+    jatahKaryawan: Number(existing.tarif_jatah_karyawan),
+    jatahPemilik: Number(existing.tarif_jatah_pemilik),
+    kasir: user,
+  };
+}
 
 function parseDate(value: unknown) {
   if (!value) return new Date();
@@ -74,6 +151,10 @@ export async function POST(request: Request) {
       body?.tanggalWaktu,
     );
 
+    const clientTransactionId = parseClientTransactionId(
+      body?.clientTransactionId,
+    );
+
     if (!jenisKendaraanId) {
       return jsonError(
         400,
@@ -96,6 +177,43 @@ export async function POST(request: Request) {
         "INVALID_DATE",
         "Format tanggal transaksi tidak valid",
       );
+    }
+
+    if (
+      hasClientTransactionId(body?.clientTransactionId) &&
+      !clientTransactionId
+    ) {
+      return jsonError(
+        400,
+        "INVALID_CLIENT_TRANSACTION_ID",
+        "clientTransactionId harus berupa UUID yang valid",
+      );
+    }
+
+    if (clientTransactionId) {
+      const existing = await findMobileTransaction(
+        connection,
+        clientTransactionId,
+        auth.user.id,
+      );
+
+      if (existing) {
+        if (!isSameTransactionRequest(existing, jenisKendaraanId, plate)) {
+          return jsonError(
+            409,
+            "IDEMPOTENCY_CONFLICT",
+            "clientTransactionId sudah dipakai untuk transaksi berbeda",
+          );
+        }
+
+        return jsonOk({
+          duplicate: true,
+          transaction: existingTransactionPayload(existing, {
+            id: auth.user.id,
+            username: auth.user.username,
+          }),
+        });
+      }
     }
 
     await connection.beginTransaction();
@@ -157,6 +275,27 @@ export async function POST(request: Request) {
     if (duplicateRows.length) {
       await connection.rollback();
 
+      if (
+        clientTransactionId &&
+        String(duplicateRows[0].id) === clientTransactionId
+      ) {
+        const existing = await findMobileTransaction(
+          connection,
+          clientTransactionId,
+          auth.user.id,
+        );
+
+        if (existing) {
+          return jsonOk({
+            duplicate: true,
+            transaction: existingTransactionPayload(existing, {
+              id: auth.user.id,
+              username: auth.user.username,
+            }),
+          });
+        }
+      }
+
       return jsonError(
         409,
         "DUPLICATE_PLATE",
@@ -201,7 +340,7 @@ export async function POST(request: Request) {
        Insert transaksi
        =============================== */
 
-    const id = randomUUID();
+    const id = clientTransactionId ?? randomUUID();
 
     const sqlDate = body?.tanggalWaktu
       ? requestedDate
@@ -210,8 +349,9 @@ export async function POST(request: Request) {
           .replace("T", " ")
       : nowUtcSql();
 
-    await connection.query<ResultSetHeader>(
-      `INSERT INTO transaksi (
+    try {
+      await connection.query<ResultSetHeader>(
+        `INSERT INTO transaksi (
         id,
         tanggal_waktu,
         jenis_kendaraan_id,
@@ -221,18 +361,47 @@ export async function POST(request: Request) {
         tarif_jatah_pemilik,
         kasir_id
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        sqlDate,
-        vehicle.id,
-        plate,
-        tarif,
-        jatahKaryawan,
-        jatahPemilik,
-        auth.user.id,
-      ],
-    );
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          sqlDate,
+          vehicle.id,
+          plate,
+          tarif,
+          jatahKaryawan,
+          jatahPemilik,
+          auth.user.id,
+        ],
+      );
+    } catch (error) {
+      if (clientTransactionId && isDuplicateKeyError(error)) {
+        await connection.rollback();
+
+        const existing = await findMobileTransaction(
+          connection,
+          clientTransactionId,
+          auth.user.id,
+        );
+
+        if (existing && isSameTransactionRequest(existing, jenisKendaraanId, plate)) {
+          return jsonOk({
+            duplicate: true,
+            transaction: existingTransactionPayload(existing, {
+              id: auth.user.id,
+              username: auth.user.username,
+            }),
+          });
+        }
+
+        return jsonError(
+          409,
+          "IDEMPOTENCY_CONFLICT",
+          "clientTransactionId sudah dipakai untuk transaksi berbeda",
+        );
+      }
+
+      throw error;
+    }
 
     /* ===============================
        COMMIT DULU
