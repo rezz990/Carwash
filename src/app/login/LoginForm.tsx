@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -13,7 +12,6 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const router = useRouter()
   const { addToast } = useToast()
 
   async function onSubmit(formData: FormData) {
@@ -28,6 +26,7 @@ export function LoginForm() {
         username,
         password,
         redirect: false,
+        callbackUrl: "/admin",
       })
 
       if (!res?.ok || res.error) {
@@ -39,8 +38,10 @@ export function LoginForm() {
         addToast("Gagal masuk. Periksa kredensial Anda.", "error")
       } else {
         addToast("Berhasil masuk! Selamat datang kembali.", "success")
-        router.replace("/admin")
-        router.refresh()
+        // Gunakan full navigation setelah cookie sesi baru tersimpan. Navigasi
+        // client dapat mempertahankan cache SessionProvider dari sesi lama dan
+        // membuat IdleLogout langsung menganggap login baru sudah kedaluwarsa.
+        window.location.replace(res.url || "/admin")
       }
     } catch {
       setError("Terjadi kesalahan sistem.")
