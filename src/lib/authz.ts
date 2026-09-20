@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import pool from "@/lib/db"
 import type { RowDataPacket } from "mysql2"
+import { isSessionExpired } from "@/lib/sessionPolicy"
 
 export type CurrentUser = {
   id: string
@@ -13,14 +14,19 @@ export type CurrentUser = {
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id as string | undefined
-  if (!userId) return null
+  const userId = session?.user?.id
+  if (!userId || isSessionExpired(session)) return null
 
   const [rows] = await pool.query<RowDataPacket[]>(
-    "SELECT id, username, nama_lengkap, role, aktif FROM users WHERE id = ? LIMIT 1",
+    "SELECT id, username, nama_lengkap, role, aktif, session_version FROM users WHERE id = ? LIMIT 1",
     [userId]
   )
-  if (rows.length === 0 || !rows[0].aktif) return null
+  if (
+    rows.length === 0 ||
+    !rows[0].aktif ||
+    !Number.isSafeInteger(session.sessionVersion) ||
+    Number(rows[0].session_version) !== session.sessionVersion
+  ) return null
 
   return {
     id: String(rows[0].id),

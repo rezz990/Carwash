@@ -30,20 +30,19 @@ export function LoginForm() {
         redirect: false,
       })
 
-      if (res?.error) {
-        if (res.error === "Akun dinonaktifkan") {
+      if (!res?.ok || res.error) {
+        if (res?.error === "Akun dinonaktifkan") {
           setError("Akun Anda telah dinonaktifkan.")
         } else {
           setError("Username atau password salah.")
         }
         addToast("Gagal masuk. Periksa kredensial Anda.", "error")
       } else {
-        localStorage.setItem("carwash.admin.lastActivity", String(Date.now()))
         addToast("Berhasil masuk! Selamat datang kembali.", "success")
-        router.push("/admin")
+        router.replace("/admin")
         router.refresh()
       }
-    } catch (err) {
+    } catch {
       setError("Terjadi kesalahan sistem.")
       addToast("Terjadi kesalahan sistem.", "error")
     } finally {

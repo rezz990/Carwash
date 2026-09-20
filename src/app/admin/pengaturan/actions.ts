@@ -1,287 +1,151 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
-import { requireAdmin } from "@/lib/authz"
-import pool from "@/lib/db"
 import bcrypt from "bcryptjs"
-import type { RowDataPacket } from "mysql2"
+import type { ResultSetHeader, RowDataPacket } from "mysql2"
+import pool from "@/lib/db"
+import { requireAdmin, type CurrentUser } from "@/lib/authz"
 import { utcSqlToIso } from "@/lib/datetime"
 import { logActivity, type ActivityActor } from "@/lib/activityLog"
 import { MAX_LOGIN_TIMEOUT_MINUTES, MIN_LOGIN_TIMEOUT_MINUTES, setLoginTimeoutMinutes } from "@/lib/loginTimeout"
+import { MAX_BACKUP_ROWS, insertBackupRows, validateTransactionBackup, type BackupRow } from "@/lib/transactionBackup"
 
-function toActor(user: { id: string; username: string; role: string } | null): ActivityActor {
-  if (!user) return null
-  return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" }
+function toActor(user: CurrentUser): ActivityActor {
+  return { id: user.id, username: user.username, role: user.role }
+}
+
+function mysqlCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
 }
 
 export async function updateLoginTimeout(minutes: number) {
   const { error, user } = await requireAdmin()
   if (error || !user) return { error: error ?? "Anda harus login" }
-  if (!Number.isInteger(minutes) || minutes < MIN_LOGIN_TIMEOUT_MINUTES || minutes > MAX_LOGIN_TIMEOUT_MINUTES) {
-    return { error: "Timeout harus antara 5 menit dan 7 hari" }
+  if (!Number.isInteger(minutes) || minutes < MIN_LOGIN_TIMEOUT_MINUTES || minutes > MAX_LOGIN_TIMEOUT_MINUTES) return { error: "Timeout harus antara 5 menit dan 7 hari" }
+  try {
+    await setLoginTimeoutMinutes(minutes)
+  } catch (cause) {
+    console.error("Update login timeout error:", cause)
+    return { error: "Timeout login belum tersimpan" }
   }
-
-  await setLoginTimeoutMinutes(minutes)
-  await logActivity({
-    actor: toActor(user),
-    action: "UPDATE",
-    entityType: "pengaturan",
-    entityId: null,
-    description: `Mengubah timeout login menjadi ${minutes} menit`,
-    newValue: { login_timeout_minutes: minutes },
-  })
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "pengaturan", description: `Mengubah timeout login menjadi ${minutes} menit`, newValue: { login_timeout_minutes: minutes } })
   revalidatePath("/admin", "layout")
   return { success: true }
 }
 
-// ---------------------------------------------------------
-// AKUN SAYA
-// ---------------------------------------------------------
-
-export async function updateOwnProfile(namaLengkap: string) {
-  const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id
-  const username = (session?.user as any)?.name
-  if (!userId) return { error: "Anda harus login" }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT nama_lengkap FROM users WHERE id = ? LIMIT 1",
-      [userId]
-    )
-    const oldNama = rows[0]?.nama_lengkap ?? null
-
-    await pool.query(
-      "UPDATE users SET nama_lengkap = ? WHERE id = ?",
-      [namaLengkap.trim() || null, userId]
-    )
-
-    await logActivity({
-      actor: { id: userId, username },
-      action: "UPDATE",
-      entityType: "user",
-      entityId: userId,
-      description: "Mengubah nama lengkap akun sendiri",
-      oldValue: { nama_lengkap: oldNama },
-      newValue: { nama_lengkap: namaLengkap.trim() || null },
-    })
-  } catch (error) {
-    console.error("Update own profile error:", error)
-    return { error: "Gagal menyimpan nama" }
-  }
-
-  revalidatePath("/admin/pengaturan")
-  return { success: true }
-}
-
-export async function updateOwnUsername(username: string) {
-  const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id
-  const oldUsername = (session?.user as any)?.name
-  if (!userId) return { error: "Sesi tidak valid" }
-
-  const clean = username.trim().toLowerCase()
-  if (!/^[a-z0-9_]{3,20}$/.test(clean)) {
-    return { error: "Username 3-20 karakter, hanya huruf kecil, angka, dan underscore" }
-  }
-
-  // pastikan tidak dipakai user lain
-  const [existing] = await pool.query<RowDataPacket[]>(
-    "SELECT id FROM users WHERE username = ? AND id != ?",
-    [clean, userId]
-  )
-  if (existing.length > 0) return { error: "Username sudah dipakai user lain" }
-
-  await pool.query("UPDATE users SET username = ? WHERE id = ?", [clean, userId])
-
-  await logActivity({
-    actor: { id: userId, username: clean },
-    action: "UPDATE",
-    entityType: "user",
-    entityId: userId,
-    description: `Mengubah username sendiri dari "${oldUsername ?? "?"}" menjadi "${clean}"`,
-    oldValue: { username: oldUsername ?? null },
-    newValue: { username: clean },
-  })
-
-  revalidatePath("/pengaturan") // sesuaikan dengan route halaman ini
-  return { success: true }
-}
-
-export async function changeOwnPassword(params: {
-  currentPassword: string
-  newPassword: string
-}) {
-  const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id
-  const username = (session?.user as any)?.name
-  if (!userId) return { error: "Anda harus login" }
-
-  if (params.newPassword.length < 6) {
-    return { error: "Password baru minimal 6 karakter" }
-  }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT password_hash FROM users WHERE id = ?",
-      [userId]
-    )
-    if (rows.length === 0) return { error: "User tidak ditemukan" }
-
-    const user = rows[0]
-    const isValidPassword = await bcrypt.compare(params.currentPassword, user.password_hash)
-
-    if (!isValidPassword) {
-      return { error: "Password lama salah" }
-    }
-
-    const newPasswordHash = await bcrypt.hash(params.newPassword, 10)
-    await pool.query(
-      "UPDATE users SET password_hash = ? WHERE id = ?",
-      [newPasswordHash, userId]
-    )
-
-    // Tidak pernah menyimpan old_value/new_value untuk password, meski sudah
-    // di-hash - cukup catat bahwa aksinya terjadi.
-    await logActivity({
-      actor: { id: userId, username },
-      action: "UPDATE",
-      entityType: "auth",
-      entityId: userId,
-      description: "Mengubah password akun sendiri",
-    })
-  } catch (error) {
-    console.error("Change password error:", error)
-    return { error: "Gagal mengubah password" }
-  }
-
-  return { success: true }
-}
-
-// ---------------------------------------------------------
-// BACKUP & PEMULIHAN
-// ---------------------------------------------------------
-
-export type BackupRow = {
-  id?: string
-  tanggal_waktu: string
-  jenis_kendaraan_id: string
-  plat_nomor: string | null
-  tarif_total: number
-  tarif_jatah_karyawan: number
-  tarif_jatah_pemilik: number
-  kasir_id: string
-}
-
-export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[]; error?: string }> {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { data: [], error: authError }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT id, tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id
-      FROM transaksi
-      ORDER BY tanggal_waktu ASC
-    `)
-
-    const data = rows.map(r => ({
-      ...r,
-      id: r.id,
-      tanggal_waktu: utcSqlToIso(r.tanggal_waktu),
-      tarif_total: Number(r.tarif_total),
-      tarif_jatah_karyawan: Number(r.tarif_jatah_karyawan),
-      tarif_jatah_pemilik: Number(r.tarif_jatah_pemilik)
-    }))
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "EXPORT",
-      entityType: "laporan",
-      description: `Mengekspor backup seluruh data transaksi (${data.length} baris)`,
-      newValue: { jumlah_baris: data.length },
-    })
-
-    return { data: data as BackupRow[] }
-  } catch (error) {
-    console.error("Fetch backup error:", error)
-    return { data: [], error: "Gagal mengambil data untuk backup" }
-  }
-}
-
-export async function restoreTransaksiBackup(params: {
-  rows: BackupRow[]
-}) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
-
-  if (!Array.isArray(params.rows) || params.rows.length === 0) {
-    return { error: "File backup kosong atau tidak valid" }
-  }
-
-  for (const row of params.rows) {
-    if (
-      !row.tanggal_waktu ||
-      !row.jenis_kendaraan_id ||
-      typeof row.tarif_total !== "number" ||
-      typeof row.tarif_jatah_karyawan !== "number" ||
-      typeof row.tarif_jatah_pemilik !== "number" ||
-      !row.kasir_id
-    ) {
-      return { error: "Format file backup tidak sesuai. Pastikan file belum diubah manual." }
-    }
-  }
+export async function updateOwnAccount(params: { namaLengkap: string; username: string }) {
+  const { user, error } = await requireAdmin()
+  if (error || !user) return { error: error ?? "Anda harus login" }
+  const username = params.username.trim().toLowerCase()
+  const name = params.namaLengkap.trim().replace(/\s+/g, " ")
+  if (!/^[a-z0-9_]{3,64}$/.test(username)) return { error: "Username harus 3–64 karakter dan hanya berisi huruf kecil, angka, atau underscore" }
+  if (name.length > 255) return { error: "Nama lengkap maksimal 255 karakter" }
 
   const connection = await pool.getConnection()
+  let previous: RowDataPacket | undefined
   try {
     await connection.beginTransaction()
-
-    const CHUNK_SIZE = 500
-    for (let i = 0; i < params.rows.length; i += CHUNK_SIZE) {
-      const chunk = params.rows.slice(i, i + CHUNK_SIZE)
-      const values = chunk.map(row => {
-        const dateObj = new Date(row.tanggal_waktu)
-        if (Number.isNaN(dateObj.getTime())) throw new Error("Tanggal backup tidak valid")
-        const formattedDate = dateObj.toISOString().slice(0, 19).replace("T", " ")
-
-        return [
-          row.id || crypto.randomUUID(),
-          formattedDate,
-          row.jenis_kendaraan_id, 
-          row.plat_nomor, 
-          row.tarif_total, 
-          row.tarif_jatah_karyawan, 
-          row.tarif_jatah_pemilik, 
-          row.kasir_id
-        ]
-      })
-      
-      await connection.query(
-        "INSERT IGNORE INTO transaksi (id, tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id) VALUES ?",
-        [values]
-      )
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT username, nama_lengkap FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [user.id])
+    previous = rows[0]
+    if (!previous) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
     }
-
+    const [result] = await connection.query<ResultSetHeader>("UPDATE users SET username = ?, nama_lengkap = ? WHERE id = ?", [username, name || null, user.id])
+    if (result.affectedRows !== 1) throw new Error("Update profil tidak mengubah satu baris")
     await connection.commit()
-  } catch (error) {
+  } catch (cause) {
     await connection.rollback()
-    console.error("Restore insert error:", error)
-    return {
-      error: "Gagal restore data. Kemungkinan ada jenis_kendaraan_id atau kasir_id yang sudah tidak ada di database.",
-    }
+    console.error("Update own account error:", cause)
+    if (mysqlCode(cause) === "ER_DUP_ENTRY") return { error: "Username sudah dipakai user lain" }
+    return { error: "Profil belum tersimpan" }
   } finally {
     connection.release()
   }
 
-  await logActivity({
-    actor: toActor(currentUser as any),
-    action: "CREATE",
-    entityType: "laporan",
-    description: `Restore backup transaksi dengan mode aman/append (${params.rows.length} baris)`,
-    newValue: { mode: "append", jumlah_baris: params.rows.length },
-  })
-
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: user.id, description: "Memperbarui profil akun sendiri", oldValue: previous ? { username: previous.username, nama_lengkap: previous.nama_lengkap } : undefined, newValue: { username, nama_lengkap: name || null } })
   revalidatePath("/admin", "layout")
-  return { success: true, jumlahRestored: params.rows.length }
+  revalidatePath("/admin/pengaturan")
+  return { success: true }
+}
+
+export async function changeOwnPassword(params: { currentPassword: string; newPassword: string }) {
+  const { user, error } = await requireAdmin()
+  if (error || !user) return { error: error ?? "Anda harus login" }
+  if (params.newPassword.length < 8 || params.newPassword.length > 128) return { error: "Password baru harus 8–128 karakter" }
+  if (params.currentPassword === params.newPassword) return { error: "Password baru harus berbeda dari password lama" }
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT password_hash FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [user.id])
+    if (!rows[0]) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
+    }
+    if (!await bcrypt.compare(params.currentPassword, String(rows[0].password_hash))) {
+      await connection.rollback()
+      return { error: "Password lama salah" }
+    }
+    const passwordHash = await bcrypt.hash(params.newPassword, 10)
+    const [result] = await connection.query<ResultSetHeader>("UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?", [passwordHash, user.id])
+    if (result.affectedRows !== 1) throw new Error("Update password tidak mengubah satu baris")
+    await connection.query("DELETE FROM mobile_sessions WHERE user_id = ?", [user.id])
+    await connection.commit()
+  } catch (cause) {
+    await connection.rollback()
+    console.error("Change password error:", cause)
+    return { error: "Password belum berubah" }
+  } finally {
+    connection.release()
+  }
+
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "auth", entityId: user.id, description: "Mengubah password akun sendiri dan mencabut semua sesi aktif" })
+  return { success: true }
+}
+
+export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[]; error?: string }> {
+  const { error, user } = await requireAdmin()
+  if (error || !user) return { data: [], error: error ?? "Anda harus login" }
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, tanggal_waktu, jenis_kendaraan_id, plat_nomor, tarif_total,
+             tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id
+      FROM transaksi ORDER BY tanggal_waktu ASC LIMIT ?
+    `, [MAX_BACKUP_ROWS + 1])
+    if (rows.length > MAX_BACKUP_ROWS) return { data: [], error: `Data melebihi ${MAX_BACKUP_ROWS.toLocaleString("id-ID")} transaksi. Gunakan backup database dari hosting.` }
+    const data: BackupRow[] = rows.map((row) => ({
+      id: String(row.id), tanggal_waktu: utcSqlToIso(row.tanggal_waktu), jenis_kendaraan_id: String(row.jenis_kendaraan_id),
+      plat_nomor: row.plat_nomor ? String(row.plat_nomor) : null, tarif_total: Number(row.tarif_total),
+      tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan), tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik), kasir_id: String(row.kasir_id),
+    }))
+    await logActivity({ actor: toActor(user), action: "EXPORT", entityType: "laporan", description: `Mengekspor salinan ${data.length} transaksi`, newValue: { jumlah_baris: data.length } })
+    return { data }
+  } catch (cause) {
+    console.error("Fetch backup error:", cause)
+    return { data: [], error: "Gagal menyiapkan salinan transaksi" }
+  }
+}
+
+export async function restoreTransaksiBackup(params: { rows: unknown }) {
+  const { error, user } = await requireAdmin()
+  if (error || !user) return { error: error ?? "Anda harus login" }
+  let rows: BackupRow[]
+  try { rows = validateTransactionBackup(params.rows) }
+  catch (cause) { return { error: cause instanceof Error ? cause.message : "File salinan tidak valid" } }
+
+  const connection = await pool.getConnection()
+  try {
+    const result = await insertBackupRows(connection, rows)
+    await logActivity({ actor: toActor(user), action: "CREATE", entityType: "laporan", description: `Pemulihan transaksi: ${result.inserted} ditambahkan, ${result.skipped} dilewati`, newValue: { mode: "append", inserted: result.inserted, skipped: result.skipped } })
+    revalidatePath("/admin", "layout")
+    return { success: true, jumlahRestored: result.inserted, jumlahSkipped: result.skipped }
+  } catch (cause) {
+    console.error("Restore transaksi error:", cause)
+    return { error: "Pemulihan dibatalkan tanpa menambah data. Pastikan user dan jenis kendaraan dari file masih tersedia." }
+  } finally {
+    connection.release()
+  }
 }

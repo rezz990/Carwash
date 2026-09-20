@@ -1,43 +1,22 @@
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 import pool from "@/lib/db"
 import type { RowDataPacket } from "mysql2"
-import { PengaturanTabs } from "./PengaturanTabs"
+import { getCurrentUser } from "@/lib/authz"
 import { getLoginTimeoutMinutes } from "@/lib/loginTimeout"
+import { PengaturanTabs } from "./PengaturanTabs"
 
 export default async function PengaturanPage() {
+  const currentUser = await getCurrentUser()
+  if (!currentUser || currentUser.role !== "admin") return null
   const loginTimeoutMinutes = await getLoginTimeoutMinutes()
-  const session = await getServerSession(authOptions)
-  const userId = (session?.user as any)?.id
+  let name = currentUser.nama_lengkap ?? ""
+  let username = currentUser.username
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>("SELECT nama_lengkap, username FROM users WHERE id = ? LIMIT 1", [currentUser.id])
+    if (rows[0]) { name = rows[0].nama_lengkap ? String(rows[0].nama_lengkap) : ""; username = String(rows[0].username) }
+  } catch (error) { console.error("Fetch profile error:", error) }
 
-  let namaLengkap = ""
-  let username = ""
-
-  if (userId) {
-    try {
-      const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT nama_lengkap, username FROM users WHERE id = ?",
-        [userId]
-      )
-      if (rows.length > 0) {
-        namaLengkap = rows[0].nama_lengkap
-        username = rows[0].username
-      }
-    } catch (error) {
-      console.error("Fetch profile error:", error)
-    }
-  }
-
-  return (
-    <div className="space-y-5 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out min-w-0">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Pengaturan</h1>
-        <p className="text-slate-500 mt-1.5 sm:mt-2 text-sm sm:text-base">
-          Kelola akun Anda dan pengaturan sistem.
-        </p>
-      </div>
-
-      <PengaturanTabs currentNama={namaLengkap} currentUsername={username} loginTimeoutMinutes={loginTimeoutMinutes}/>
-    </div>
-  )
+  return <div className="mx-auto max-w-7xl space-y-5 sm:space-y-7">
+    <header><p className="text-sm font-medium text-slate-500">Akun dan sistem</p><h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Pengaturan</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Kelola profil, keamanan sesi, notifikasi perangkat, dan salinan transaksi.</p></header>
+    <PengaturanTabs currentNama={name} currentUsername={username} loginTimeoutMinutes={loginTimeoutMinutes} />
+  </div>
 }

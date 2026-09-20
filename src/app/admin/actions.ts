@@ -11,6 +11,7 @@ function getTodayJakarta(): string {
 
 export type OverviewStats = {
   pendapatanHariIni: number
+  bagianPemilikHariIni: number
   transaksiHariIni: number
   pendapatanKemarin: number
   persenPerubahan: number | null 
@@ -30,7 +31,7 @@ export type OverviewStats = {
 
 export async function fetchOverviewStats(): Promise<OverviewStats> {
   const { error: authError } = await requireAdmin()
-  if (authError) return { pendapatanHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0, persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0, kategoriTerlarisMingguIni: null, transaksiTerbaru: [], error: authError }
+  if (authError) return { pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0, persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0, kategoriTerlarisMingguIni: null, transaksiTerbaru: [], error: authError }
   const todayStr = getTodayJakarta()
 
   const yesterdayStr = addJakartaDays(todayStr, -1)
@@ -46,12 +47,13 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       pool.query<RowDataPacket[]>(`
         SELECT
           COALESCE(SUM(CASE WHEN tanggal_waktu >= ? THEN tarif_total ELSE 0 END), 0) AS pendapatan_hari_ini,
+          COALESCE(SUM(CASE WHEN tanggal_waktu >= ? THEN tarif_jatah_pemilik ELSE 0 END), 0) AS bagian_pemilik_hari_ini,
           SUM(CASE WHEN tanggal_waktu >= ? THEN 1 ELSE 0 END) AS transaksi_hari_ini,
           COALESCE(SUM(CASE WHEN tanggal_waktu >= ? AND tanggal_waktu < ? THEN tarif_total ELSE 0 END), 0) AS pendapatan_kemarin,
           COALESCE(SUM(tarif_total), 0) AS pendapatan_7_hari
         FROM transaksi
         WHERE tanggal_waktu >= ? AND tanggal_waktu <= ?
-      `, [todayStart, todayStart, yesterdayStart, todayStart, rangeStart, rangeEnd]),
+      `, [todayStart, todayStart, todayStart, yesterdayStart, todayStart, rangeStart, rangeEnd]),
       pool.query<RowDataPacket[]>(`
         SELECT CONCAT(jk.kategori, ' ', jk.ukuran) AS label, COUNT(*) AS jumlah
         FROM transaksi t
@@ -73,6 +75,7 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
 
     const summary = summaryRows[0] ?? {}
     const pendapatanHariIni = Number(summary.pendapatan_hari_ini) || 0
+    const bagianPemilikHariIni = Number(summary.bagian_pemilik_hari_ini) || 0
     const transaksiHariIni = Number(summary.transaksi_hari_ini) || 0
     const pendapatanKemarin = Number(summary.pendapatan_kemarin) || 0
     const totalPendapatan7Hari = Number(summary.pendapatan_7_hari) || 0
@@ -96,6 +99,7 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
 
     return {
       pendapatanHariIni,
+      bagianPemilikHariIni,
       transaksiHariIni,
       pendapatanKemarin,
       persenPerubahan,
@@ -107,7 +111,7 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
   } catch (error) {
     console.error("Fetch overview stats error:", error)
     return {
-      pendapatanHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0,
+      pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0,
       persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0,
       kategoriTerlarisMingguIni: null, transaksiTerbaru: [],
       error: "Gagal memuat data overview",

@@ -1,11 +1,15 @@
 "use client"
 
-import { useState, useTransition, useRef, useEffect } from "react"
+import { useState, useTransition } from "react"
+import { CarFront, Pencil, Plus, Power } from "lucide-react"
+import { useToast } from "@/components/toast/ToastProvider"
 import { Button } from "@/components/ui/Button"
+import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
-import { updateTarifDefault, toggleAktifJenisKendaraan, createJenisKendaraan } from "./actions"
+import { Modal } from "@/components/ui/Modal"
+import { createJenisKendaraan, toggleAktifJenisKendaraan, updateTarifDefault } from "./actions"
 
-type JenisKendaraan = {
+export type JenisKendaraan = {
   id: string
   kategori: string
   ukuran: string
@@ -15,488 +19,104 @@ type JenisKendaraan = {
   aktif: boolean
 }
 
-// Toast notification component
-function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3500)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300 ${
-      type === "success" 
-        ? "bg-emerald-50/95 border-emerald-200 text-emerald-800" 
-        : "bg-red-50/95 border-red-200 text-red-800"
-    }`}>
-      {type === "success" ? (
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-600 shrink-0"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      ) : (
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 shrink-0"><circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/></svg>
-      )}
-      <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="ml-2 text-current opacity-50 hover:opacity-100 transition-opacity">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-      </button>
-    </div>
-  )
+function rupiah(value: number) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value)
 }
 
-// Format rupiah
-function formatRupiah(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
+function TariffForm({ item, onClose, onSaved }: {
+  item?: JenisKendaraan
+  onClose: () => void
+  onSaved: (message: string) => void
+}) {
+  const [kategori, setKategori] = useState(item?.kategori ?? "")
+  const [ukuran, setUkuran] = useState(item?.ukuran ?? "")
+  const [tarif, setTarif] = useState(item ? String(item.tarif_default) : "")
+  const [employeeShare, setEmployeeShare] = useState(item ? String(item.jatah_karyawan) : "")
+  const [error, setError] = useState("")
+  const [pending, startTransition] = useTransition()
+  const tariffNumber = Number(tarif)
+  const employeeNumber = Number(employeeShare)
+  const ownerShare = Number.isFinite(tariffNumber) && Number.isFinite(employeeNumber) ? Math.max(0, tariffNumber - employeeNumber) : 0
 
-// Inline editable tarif + jatah karyawan cell (jatah pemilik dihitung otomatis)
-function TarifCell({ item, onResult }: { item: JenisKendaraan; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [editing, setEditing] = useState(false)
-  const [tarif, setTarif] = useState(item.tarif_default.toString())
-  const [jatahKaryawan, setJatahKaryawan] = useState(item.jatah_karyawan.toString())
-  const [isPending, startTransition] = useTransition()
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
-
-  // Sync state kalau props berubah dari server (setelah revalidation)
-  useEffect(() => {
-    if (!editing) {
-      setTarif(item.tarif_default.toString())
-      setJatahKaryawan(item.jatah_karyawan.toString())
-    }
-  }, [item.tarif_default, item.jatah_karyawan, editing])
-
-  const tarifNum = parseFloat(tarif) || 0
-  const jatahKaryawanNum = parseFloat(jatahKaryawan) || 0
-  const jatahPemilikPreview = tarifNum - jatahKaryawanNum
-
-  const handleSave = () => {
-    const tarifVal = parseFloat(tarif)
-    const jatahVal = parseFloat(jatahKaryawan)
-
-    if (isNaN(tarifVal) || tarifVal < 0) {
-      onResult("Tarif harus berupa angka positif", "error")
-      resetValues()
-      return
-    }
-    if (isNaN(jatahVal) || jatahVal < 0) {
-      onResult("Jatah karyawan harus berupa angka positif", "error")
-      resetValues()
-      return
-    }
-    if (jatahVal > tarifVal) {
-      onResult("Jatah karyawan tidak boleh melebihi tarif total", "error")
-      resetValues()
-      return
-    }
-
-    // Kalau tidak ada perubahan, skip update
-    if (tarifVal === item.tarif_default && jatahVal === item.jatah_karyawan) {
-      setEditing(false)
-      return
-    }
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    if (!kategori.trim() || !ukuran.trim()) return setError("Kategori dan ukuran wajib diisi")
+    if (!tarif || !Number.isFinite(tariffNumber) || tariffNumber < 0) return setError("Tarif harus berupa angka yang valid")
+    if (!employeeShare || !Number.isFinite(employeeNumber) || employeeNumber < 0) return setError("Bagian karyawan harus berupa angka yang valid")
+    if (employeeNumber > tariffNumber) return setError("Bagian karyawan tidak boleh melebihi tarif total")
 
     startTransition(async () => {
-      const result = await updateTarifDefault(item.id, tarifVal, jatahVal)
-      if (result.error) {
-        onResult(result.error, "error")
-        resetValues()
-      } else {
-        onResult(`Tarif ${item.kategori} ${item.ukuran} berhasil diperbarui`, "success")
-      }
-      setEditing(false)
-    })
-  }
-
-  const resetValues = () => {
-    setTarif(item.tarif_default.toString())
-    setJatahKaryawan(item.jatah_karyawan.toString())
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") handleSave()
-    if (e.key === "Escape") {
-      resetValues()
-      setEditing(false)
-    }
-  }
-
-  if (editing) {
-    return (
-      <div className="flex flex-col gap-2 py-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Tarif</span>
-            <Input
-              ref={inputRef}
-              type="number"
-              min="0"
-              step="1000"
-              value={tarif}
-              onChange={(e) => setTarif(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={isPending}
-              className="w-36 h-9 pl-14 text-sm bg-white border-yellow-300 focus-visible:ring-yellow-400"
-            />
-          </div>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">Jatah Kry</span>
-            <Input
-              type="number"
-              min="0"
-              step="1000"
-              value={jatahKaryawan}
-              onChange={(e) => setJatahKaryawan(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onBlur={handleSave}
-              disabled={isPending}
-              className="w-40 h-9 pl-20 text-sm bg-white border-yellow-300 focus-visible:ring-yellow-400"
-            />
-          </div>
-          {isPending && (
-            <div className="w-5 h-5 border-2 border-yellow-200 border-t-yellow-400 rounded-full animate-spin" />
-          )}
-        </div>
-        <span className="text-xs text-slate-400 pl-1">
-          Jatah pemilik: <span className="font-medium text-slate-600">{formatRupiah(Math.max(jatahPemilikPreview, 0))}</span> (otomatis)
-        </span>
-      </div>
-    )
-  }
-
-  return (
-    <button
-      onClick={() => setEditing(true)}
-      className="group flex flex-col items-start gap-0.5 px-3 py-2 -mx-3 -my-2 rounded-lg hover:bg-yellow-50/80 transition-colors cursor-pointer text-left"
-      title="Klik untuk edit tarif & jatah karyawan"
-    >
-      <div className="flex items-center gap-2">
-        <span className="font-semibold text-slate-900 tabular-nums">
-          {formatRupiah(item.tarif_default)}
-        </span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300 group-hover:text-yellow-500 transition-colors"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
-      </div>
-      <span className="text-xs text-slate-400 tabular-nums">
-        Kry {formatRupiah(item.jatah_karyawan)} · Pemilik {formatRupiah(item.jatah_pemilik)}
-      </span>
-    </button>
-  )
-}
-
-// Toggle switch component
-function ToggleSwitch({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (val: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? "bg-yellow-400" : "bg-slate-200"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform duration-300 ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
-  )
-}
-
-// Status badge
-function StatusBadge({ aktif }: { aktif: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-      aktif 
-        ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
-        : "bg-slate-100 text-slate-500 border border-slate-200"
-    }`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${aktif ? "bg-emerald-500" : "bg-slate-400"}`} />
-      {aktif ? "Aktif" : "Nonaktif"}
-    </span>
-  )
-}
-
-// Kategori icon
-function KategoriIcon({ kategori }: { kategori: string }) {
-  if (kategori === "Motor") {
-    return (
-      <div className="w-9 h-9 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-600">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"/></svg>
-      </div>
-    )
-  }
-  return (
-    <div className="w-9 h-9 rounded-lg bg-sky-50 border border-sky-200/60 flex items-center justify-center text-sky-600">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.4-1.7-1-2.2l-3.3-2.5a2 2 0 0 0-1.2-.5H12M8 12h-3a1 1 0 0 0-1 1v4c0 .6.4 1 1 1h2"/><circle cx="6.5" cy="16.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/><path d="M12 11V3c0-.6-.4-1-1-1H3c-.6 0-1 .4-1 1v8"/><path d="M12 7H2"/></svg>
-    </div>
-  )
-}
-
-// Modal tambah jenis kendaraan/kategori baru
-function AddKategoriForm({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [kategori, setKategori] = useState("")
-  const [ukuran, setUkuran] = useState("")
-  const [tarif, setTarif] = useState("")
-  const [jatahKaryawan, setJatahKaryawan] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  const tarifNum = parseFloat(tarif) || 0
-  const jatahKaryawanNum = parseFloat(jatahKaryawan) || 0
-  const jatahPemilikPreview = Math.max(tarifNum - jatahKaryawanNum, 0)
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-
-    const tarifVal = parseFloat(tarif)
-    const jatahVal = parseFloat(jatahKaryawan)
-
-    if (!kategori.trim() || !ukuran.trim()) {
-      setError("Kategori dan ukuran wajib diisi")
-      return
-    }
-    if (isNaN(tarifVal) || tarifVal < 0) {
-      setError("Tarif harus berupa angka positif")
-      return
-    }
-    if (isNaN(jatahVal) || jatahVal < 0) {
-      setError("Jatah karyawan harus berupa angka positif")
-      return
-    }
-    if (jatahVal > tarifVal) {
-      setError("Jatah karyawan tidak boleh melebihi tarif total")
-      return
-    }
-
-    startTransition(async () => {
-      const result = await createJenisKendaraan({
-        kategori,
-        ukuran,
-        tarifDefault: tarifVal,
-        jatahKaryawan: jatahVal,
-      })
-      if (result.error) {
-        setError(result.error)
-      } else {
-        onResult(`${kategori} ${ukuran} berhasil ditambahkan`, "success")
-        onClose()
+      try {
+        const result = item
+          ? await updateTarifDefault(item.id, tariffNumber, employeeNumber)
+          : await createJenisKendaraan({ kategori, ukuran, tarifDefault: tariffNumber, jatahKaryawan: employeeNumber })
+        if (result.error) return setError(result.error)
+        onSaved(item ? `Tarif ${item.kategori} ${item.ukuran} diperbarui` : `${kategori.trim()} ${ukuran.trim()} ditambahkan`)
+      } catch {
+        setError("Perubahan belum tersimpan. Periksa koneksi lalu coba lagi.")
       }
     })
   }
 
-  return (
-   <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-slate-900">Tambah Jenis Kendaraan</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Kembali
-        </button>
+  return <Modal title={item ? `Edit ${item.kategori} ${item.ukuran}` : "Tambah jenis kendaraan"} onClose={onClose} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button type="button" variant="outline" onClick={onClose} disabled={pending}>Batal</Button><Button type="submit" form="tariff-form" isLoading={pending}>Simpan</Button></div>}>
+    <form id="tariff-form" onSubmit={submit} className="space-y-4">
+      {error && <ErrorNotice message={error} />}
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="field-label" htmlFor="tariff-category">Kategori</label><Input id="tariff-category" maxLength={50} value={kategori} onChange={(event) => setKategori(event.target.value)} placeholder="Contoh: Mobil" disabled={Boolean(item)} autoFocus={!item} /></div>
+        <div><label className="field-label" htmlFor="tariff-size">Ukuran</label><Input id="tariff-size" maxLength={50} value={ukuran} onChange={(event) => setUkuran(event.target.value)} placeholder="Contoh: Besar" disabled={Boolean(item)} /></div>
       </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
-            {error}
-          </div>
-        )}
-
-          <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Kategori</label>
-            <Input
-              value={kategori}
-              onChange={(e) => setKategori(e.target.value)}
-              placeholder="misal: Truk"
-              required
-              autoFocus
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Ukuran</label>
-            <Input
-              value={ukuran}
-              onChange={(e) => setUkuran(e.target.value)}
-              placeholder="misal: Sedang"
-              required
-            />
-          </div>
-        </div>
-        <p className="text-xs text-slate-400 -mt-2">
-          Kategori boleh yang sudah ada (misal &quot;Motor&quot;) untuk nambah ukuran baru, atau kategori benar-benar baru.
-        </p>
-
-          <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Tarif</label>
-            <Input
-              type="number"
-              min="0"
-              step="1000"
-              value={tarif}
-              onChange={(e) => setTarif(e.target.value)}
-              placeholder="0"
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Jatah Karyawan</label>
-            <Input
-              type="number"
-              min="0"
-              step="1000"
-              value={jatahKaryawan}
-              onChange={(e) => setJatahKaryawan(e.target.value)}
-              placeholder="0"
-              required
-            />
-          </div>
-        </div>
-
-          <p className="text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-          Jatah pemilik (otomatis): <span className="font-semibold text-slate-700">{formatRupiah(jatahPemilikPreview)}</span>
-        </p>
-
-          <div className="flex gap-3 pt-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-            Batal
-          </Button>
-          <Button type="submit" className="flex-1" disabled={isPending}>
-            {isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
+      {item && <p className="text-xs leading-5 text-slate-500">Nama jenis kendaraan dikunci agar histori transaksi tetap konsisten. Tambahkan jenis baru bila nama berbeda.</p>}
+      <div><label className="field-label" htmlFor="tariff-total">Tarif total</label><Input id="tariff-total" type="number" min="0" max="10000000000" step="1000" inputMode="numeric" value={tarif} onChange={(event) => setTarif(event.target.value)} placeholder="0" autoFocus={Boolean(item)} /></div>
+      <div><label className="field-label" htmlFor="employee-share">Bagian karyawan</label><Input id="employee-share" type="number" min="0" max="10000000000" step="1000" inputMode="numeric" value={employeeShare} onChange={(event) => setEmployeeShare(event.target.value)} placeholder="0" /></div>
+      <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-medium text-emerald-700">Bagian pemilik dihitung otomatis</p><p className="mt-1 text-xl font-bold text-emerald-900 tabular-nums">{rupiah(ownerShare)}</p></div>
+    </form>
+  </Modal>
 }
 
-export function TarifTable({ data }: { data: JenisKendaraan[] }) {
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
-  const [pendingToggles, setPendingToggles] = useState<Set<string>>(new Set())
-  const [isPending, startTransition] = useTransition()
-  const [showAddModal, setShowAddModal] = useState(false)
+export function TarifTable({ data, loadError }: { data: JenisKendaraan[]; loadError?: string }) {
+  const [editor, setEditor] = useState<JenisKendaraan | "new" | null>(null)
+  const [statusTarget, setStatusTarget] = useState<JenisKendaraan | null>(null)
+  const [pending, startTransition] = useTransition()
+  const { addToast } = useToast()
 
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type })
+  function saved(message: string) {
+    setEditor(null)
+    addToast(message, "success")
   }
 
-  const handleToggle = (item: JenisKendaraan, newVal: boolean) => {
-    setPendingToggles(prev => new Set(prev).add(item.id))
+  function changeStatus() {
+    if (!statusTarget) return
+    const target = statusTarget
     startTransition(async () => {
-      const result = await toggleAktifJenisKendaraan(item.id, newVal)
-      if (result.error) {
-        showToast(result.error, "error")
-      } else {
-        showToast(
-          `${item.kategori} ${item.ukuran} ${newVal ? "diaktifkan" : "dinonaktifkan"}`,
-          "success"
-        )
+      try {
+        const result = await toggleAktifJenisKendaraan(target.id, !target.aktif)
+        if (result.error) addToast(result.error, "error")
+        else addToast(`${target.kategori} ${target.ukuran} ${target.aktif ? "dinonaktifkan" : "diaktifkan"}`, "success")
+      } catch {
+        addToast("Status belum berubah. Periksa koneksi lalu coba lagi.", "error")
+      } finally {
+        setStatusTarget(null)
       }
-      setPendingToggles(prev => {
-        const next = new Set(prev)
-        next.delete(item.id)
-        return next
-      })
     })
   }
 
-  // Kelompokkan data berdasarkan kategori yang BENERAN ADA di data (dinamis,
-  // bukan hardcode "Motor"/"Mobil" doang) - supaya kategori baru yang
-  // ditambahin admin otomatis kebuat grup sendiri
-  const kategoriList = Array.from(new Set(data.map((d) => d.kategori)))
-
-  const renderGroup = (title: string, items: JenisKendaraan[]) => (
-    <div key={title} className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
-      <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 px-6 py-3.5 border-b border-slate-200/60">
-        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={`flex flex-wrap items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 transition-colors ${
-              !item.aktif ? "bg-slate-50/50" : "hover:bg-slate-50/40"
-            }`}
-          >
-            <KategoriIcon kategori={item.kategori} />
-            
-            <div className="flex-1 min-w-[140px]">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className={`font-semibold text-sm ${!item.aktif ? "text-slate-400" : "text-slate-900"}`}>
-                  {item.kategori} {item.ukuran}
-                </span>
-                <StatusBadge aktif={item.aktif} />
-              </div>
-            </div>
-
-            <div className={`${!item.aktif ? "opacity-50" : ""}`}>
-              <TarifCell item={item} onResult={showToast} />
-            </div>
-
-            <div className="flex items-center gap-2 sm:pl-4 sm:border-l sm:border-slate-100">
-              <ToggleSwitch
-                checked={item.aktif}
-                disabled={pendingToggles.has(item.id)}
-                onChange={(val) => handleToggle(item, val)}
-              />
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && (
-          <div className="px-6 py-8 text-center text-slate-400 text-sm">
-            Tidak ada data
-          </div>
-        )}
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="space-y-6">
-      {!showAddModal && (
-        <div className="flex justify-end">
-          <Button onClick={() => setShowAddModal(true)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            Tambah Jenis Kendaraan
-          </Button>
+  return <div className="space-y-4">
+    {loadError && <ErrorNotice message={loadError} />}
+    <div className="flex justify-stretch sm:justify-end"><Button className="w-full sm:w-auto" onClick={() => setEditor("new")}><Plus size={18} /> Tambah jenis</Button></div>
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {data.map((item) => <article key={item.id} className={`rounded-2xl border bg-white p-4 shadow-sm ${item.aktif ? "border-slate-200" : "border-slate-200 opacity-70"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3"><span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${item.aktif ? "bg-yellow-50 text-yellow-700" : "bg-slate-100 text-slate-500"}`}><CarFront size={21} /></span><div className="min-w-0"><h2 className="truncate font-bold text-slate-900">{item.kategori} {item.ukuran}</h2><span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${item.aktif ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{item.aktif ? "Aktif" : "Nonaktif"}</span></div></div>
+          <button type="button" onClick={() => setEditor(item)} className="icon-button shrink-0" aria-label={`Edit tarif ${item.kategori} ${item.ukuran}`}><Pencil size={18} /></button>
         </div>
-      )}
-
-      {showAddModal && (
-        <AddKategoriForm
-          onClose={() => setShowAddModal(false)}
-          onResult={showToast}
-        />
-      )}
-
-       {/* Tabel - disembunyikan saat form aktif */}
-      {!showAddModal && kategoriList.map((kategori) =>
-        renderGroup(kategori, data.filter((d) => d.kategori === kategori))
-      )}
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+        <div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-xs font-medium text-slate-500">Tarif total</p><p className="mt-1 text-2xl font-bold tracking-tight text-slate-950 tabular-nums">{rupiah(item.tarif_default)}</p><div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 text-xs"><p className="text-slate-500">Karyawan<strong className="mt-1 block text-sm text-slate-800 tabular-nums">{rupiah(item.jatah_karyawan)}</strong></p><p className="text-slate-500">Pemilik<strong className="mt-1 block text-sm text-slate-800 tabular-nums">{rupiah(item.jatah_pemilik)}</strong></p></div></div>
+        <Button variant="outline" className={`mt-4 w-full ${item.aktif ? "text-red-700" : "text-emerald-700"}`} onClick={() => setStatusTarget(item)}><Power size={17} /> {item.aktif ? "Nonaktifkan" : "Aktifkan"}</Button>
+      </article>)}
     </div>
-  )
+    {!loadError && data.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-sm text-slate-500">Belum ada jenis kendaraan.</div>}
+
+    {editor && <TariffForm item={editor === "new" ? undefined : editor} onClose={() => setEditor(null)} onSaved={saved} />}
+    {statusTarget && <Modal title={statusTarget.aktif ? "Nonaktifkan jenis kendaraan?" : "Aktifkan jenis kendaraan?"} onClose={() => setStatusTarget(null)} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => setStatusTarget(null)} disabled={pending}>Batal</Button><Button variant={statusTarget.aktif ? "destructive" : "default"} onClick={changeStatus} isLoading={pending}>{statusTarget.aktif ? "Nonaktifkan" : "Aktifkan"}</Button></div>}><p className="text-sm leading-6 text-slate-600">{statusTarget.aktif ? `${statusTarget.kategori} ${statusTarget.ukuran} tidak akan muncul sebagai pilihan transaksi baru. Histori lama tetap tersimpan.` : `${statusTarget.kategori} ${statusTarget.ukuran} akan kembali tersedia untuk transaksi baru.`}</p></Modal>}
+  </div>
 }

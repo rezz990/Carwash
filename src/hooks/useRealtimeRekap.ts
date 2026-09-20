@@ -1,45 +1,40 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { TRANSACTION_BROADCAST } from "@/components/admin/NotificationCenter"
 import type { NewTransactionEvent } from "@/hooks/useTransactionNotifications"
 
-/**
- * Hook untuk auto-refresh data halaman rekap saat ada transaksi baru.
- * Mendengarkan broadcast event dari NotificationCenter (SSE).
- *
- * @param refreshFn - Fungsi untuk refresh data (misal: router.refresh() atau fetch ulang)
- * @param options - Konfigurasi debounce dan enable/disable
- */
+/** Menyatukan burst event transaksi menjadi satu refresh terbaru. */
 export function useRealtimeRekap(
   refreshFn: () => void,
-  options: { debounceMs?: number; enabled?: boolean } = {}
+  options: { debounceMs?: number; enabled?: boolean } = {},
 ) {
-  const { debounceMs = 2000, enabled = true } = options
+  const { debounceMs = 2_000, enabled = true } = options
   const [lastTransaction, setLastTransaction] = useState<NewTransactionEvent | null>(null)
   const [pendingRefresh, setPendingRefresh] = useState(false)
-
-  const debouncedRefresh = useCallback(() => {
-    setPendingRefresh(true)
-    const timer = setTimeout(() => {
-      refreshFn()
-      setPendingRefresh(false)
-    }, debounceMs)
-    return () => clearTimeout(timer)
-  }, [refreshFn, debounceMs])
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const runRefresh = useEffectEvent(refreshFn)
 
   useEffect(() => {
     if (!enabled) return
 
-    const handleNewTransaction = (e: Event) => {
-      const customEvent = e as CustomEvent<NewTransactionEvent>
-      setLastTransaction(customEvent.detail)
-      debouncedRefresh()
+    const handleNewTransaction = (event: Event) => {
+      setLastTransaction((event as CustomEvent<NewTransactionEvent>).detail)
+      setPendingRefresh(true)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        runRefresh()
+        setPendingRefresh(false)
+        timerRef.current = null
+      }, debounceMs)
     }
 
     window.addEventListener(TRANSACTION_BROADCAST, handleNewTransaction)
-    return () => window.removeEventListener(TRANSACTION_BROADCAST, handleNewTransaction)
-  }, [enabled, debouncedRefresh])
+    return () => {
+      window.removeEventListener(TRANSACTION_BROADCAST, handleNewTransaction)
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [debounceMs, enabled])
 
   return { lastTransaction, pendingRefresh }
 }
