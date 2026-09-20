@@ -18,18 +18,16 @@ export function useBrowserNotification() {
   const [hasAsked, setHasAsked] = useState(false)
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-
-    const isSupported = "Notification" in window
-    setSupported(isSupported)
-
-    if (isSupported) {
-      setPermission(Notification.permission)
-      const saved = localStorage.getItem(STORAGE_KEY)
-      const asked = localStorage.getItem(STORAGE_ASKED_KEY)
-      setEnabled(saved === "true" && Notification.permission === "granted")
-      setHasAsked(asked === "true")
-    }
+    const timer = window.setTimeout(() => {
+      const isSupported = "Notification" in window
+      setSupported(isSupported)
+      if (isSupported) {
+        setPermission(Notification.permission)
+        setEnabled(localStorage.getItem(STORAGE_KEY) === "true" && Notification.permission === "granted")
+        setHasAsked(localStorage.getItem(STORAGE_ASKED_KEY) === "true")
+      }
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   /**

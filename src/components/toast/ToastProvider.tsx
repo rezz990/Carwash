@@ -50,7 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ addToast }}>
       {children}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2">
+      <div className="pointer-events-none fixed inset-x-4 top-4 z-[100] flex flex-col gap-2 sm:left-auto sm:w-96">
         <AnimatePresence>
           {toasts.map((toast) => (
             <motion.div
@@ -58,11 +58,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               initial={{ opacity: 0, x: 100, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 100, scale: 0.9 }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg min-w-[300px] ${bgColors[toast.type]}`}
+              className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg w-full ${bgColors[toast.type]}`}
             >
               {icons[toast.type]}
-              <p className="text-sm font-medium text-slate-800 flex-1">{toast.message}</p>
-              <button onClick={() => removeToast(toast.id)} className="text-slate-400 hover:text-slate-600">
+              <p role="status" className="text-sm font-medium text-slate-800 flex-1 min-w-0 break-words">{toast.message}</p>
+              <button type="button" aria-label="Tutup pemberitahuan" onClick={() => removeToast(toast.id)} className="icon-button shrink-0">
                 <X className="w-4 h-4" />
               </button>
             </motion.div>

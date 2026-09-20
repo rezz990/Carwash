@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import pool from "@/lib/db";
 import { requireAdmin } from "@/lib/authz";
-import type { RowDataPacket } from "mysql2";
+import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import {
   BUSINESS_TIMEZONE,
   jakartaDateToUtcSql,
@@ -34,6 +34,7 @@ export type RekapHarian = {
 
 export type TransaksiDetail = {
   id: string;
+  jenis_kendaraan_id: string;
   tanggal_waktu: string;
   edited_at: string | null;
   plat_nomor: string | null;
@@ -83,6 +84,7 @@ export type PaginatedDailyTransactions = {
 };
 
 const DETAIL_PAGE_SIZE = 50;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getHariJakarta(dateString: string | Date): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -278,7 +280,7 @@ export async function fetchTransactionsForDate(params: {
   try {
     const [[rows], [summaryRows]] = await Promise.all([
       pool.query<RowDataPacket[]>(`
-        SELECT t.id, t.tanggal_waktu, t.edited_at, t.plat_nomor, t.tarif_total,
+        SELECT t.id, t.jenis_kendaraan_id, t.tanggal_waktu, t.edited_at, t.plat_nomor, t.tarif_total,
                t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, jk.kategori, jk.ukuran,
                u.username, u.nama_lengkap
         FROM transaksi t
@@ -303,7 +305,8 @@ export async function fetchTransactionsForDate(params: {
     const summary = summaryRows[0] ?? {};
     return {
       data: rows.map((row) => ({
-        id: String(row.id), tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
+        id: String(row.id), jenis_kendaraan_id: String(row.jenis_kendaraan_id),
+        tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
         edited_at: row.edited_at ? utcSqlToIso(row.edited_at) : null,
         plat_nomor: row.plat_nomor ?? null, tarif_total: Number(row.tarif_total),
         tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan), tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik),
@@ -324,66 +327,108 @@ export async function updateTransaksi(params: {
   id: string;
   jenisKendaraanId: string;
   platNomor: string | null;
+  expectedEditedAt: string | null;
 }) {
   const { error: authError, user: currentUser } = await requireAdmin();
-  if (authError) return { error: authError };
+  if (authError || !currentUser) return { error: authError ?? "Anda harus login" };
+
+  if (!UUID_PATTERN.test(params.id) || !UUID_PATTERN.test(params.jenisKendaraanId)) {
+    return { error: "Data transaksi tidak valid" };
+  }
+
+  const platNomor = params.platNomor?.trim().toUpperCase() || null;
+  if (platNomor && platNomor.length > 50) return { error: "Plat nomor maksimal 50 karakter" };
+
+  const connection = await pool.getConnection();
+  let oldTransaksi: RowDataPacket | undefined;
+  let newValue: Record<string, unknown> | undefined;
 
   try {
-    const [jkRows] = await pool.query<RowDataPacket[]>(
-      "SELECT tarif_default, jatah_karyawan, jatah_pemilik FROM jenis_kendaraan WHERE id = ?",
-      [params.jenisKendaraanId],
-    );
-
-    if (jkRows.length === 0) {
-      return { error: "Gagal mengambil data tarif kendaraan" };
-    }
-
-    const jenisKendaraan = jkRows[0];
-
-    const [oldRows] = await pool.query<RowDataPacket[]>(
-      "SELECT jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik FROM transaksi WHERE id = ? LIMIT 1",
+    await connection.beginTransaction();
+    const [oldRows] = await connection.query<RowDataPacket[]>(
+      `SELECT jenis_kendaraan_id, plat_nomor, tarif_total, tarif_jatah_karyawan,
+              tarif_jatah_pemilik, edited_at
+       FROM transaksi WHERE id = ? LIMIT 1 FOR UPDATE`,
       [params.id],
     );
-    const oldTransaksi = oldRows[0];
+    oldTransaksi = oldRows[0];
+    if (!oldTransaksi) {
+      await connection.rollback();
+      return { error: "Transaksi tidak ditemukan" };
+    }
 
-    await pool.query(
-      "UPDATE transaksi SET jenis_kendaraan_id = ?, plat_nomor = ?, tarif_total = ?, tarif_jatah_karyawan = ?, tarif_jatah_pemilik = ?, edited_at = UTC_TIMESTAMP() WHERE id = ?",
+    const currentEditedAt = oldTransaksi.edited_at ? utcSqlToIso(oldTransaksi.edited_at) : null;
+    if (currentEditedAt !== params.expectedEditedAt) {
+      await connection.rollback();
+      return { error: "Transaksi sudah diubah dari perangkat lain. Muat ulang lalu periksa kembali." };
+    }
+
+    const vehicleChanged = String(oldTransaksi.jenis_kendaraan_id) !== params.jenisKendaraanId;
+    let tarif = Number(oldTransaksi.tarif_total);
+    let jatahKaryawan = Number(oldTransaksi.tarif_jatah_karyawan);
+    let jatahPemilik = Number(oldTransaksi.tarif_jatah_pemilik);
+
+    if (vehicleChanged) {
+      const [vehicleRows] = await connection.query<RowDataPacket[]>(
+        `SELECT tarif_default, jatah_karyawan, jatah_pemilik
+         FROM jenis_kendaraan WHERE id = ? AND aktif = 1 LIMIT 1`,
+        [params.jenisKendaraanId],
+      );
+      const vehicle = vehicleRows[0];
+      if (!vehicle) {
+        await connection.rollback();
+        return { error: "Jenis kendaraan tidak ditemukan atau sudah nonaktif" };
+      }
+      tarif = Number(vehicle.tarif_default);
+      jatahKaryawan = Number(vehicle.jatah_karyawan);
+      jatahPemilik = Number(vehicle.jatah_pemilik);
+    }
+
+    const [result] = await connection.query<ResultSetHeader>(
+      `UPDATE transaksi
+       SET jenis_kendaraan_id = ?, plat_nomor = ?, tarif_total = ?,
+           tarif_jatah_karyawan = ?, tarif_jatah_pemilik = ?, edited_at = UTC_TIMESTAMP(6)
+       WHERE id = ?`,
       [
         params.jenisKendaraanId,
-        params.platNomor,
-        jenisKendaraan.tarif_default,
-        jenisKendaraan.jatah_karyawan,
-        jenisKendaraan.jatah_pemilik,
+        platNomor,
+        tarif,
+        jatahKaryawan,
+        jatahPemilik,
         params.id,
       ],
     );
+    if (result.affectedRows !== 1) throw new Error("Update transaksi tidak mengubah satu baris");
+    await connection.commit();
 
+    newValue = {
+      jenis_kendaraan_id: params.jenisKendaraanId,
+      plat_nomor: platNomor,
+      tarif_total: tarif,
+      tarif_jatah_karyawan: jatahKaryawan,
+      tarif_jatah_pemilik: jatahPemilik,
+    };
     await logActivity({
       actor: toActor(currentUser),
       action: "UPDATE",
       entityType: "transaksi",
       entityId: params.id,
-      description: `Admin mengubah transaksi plat "${params.platNomor ?? oldTransaksi?.plat_nomor ?? "-"}"`,
-      oldValue: oldTransaksi
-        ? {
-            jenis_kendaraan_id: oldTransaksi.jenis_kendaraan_id,
-            plat_nomor: oldTransaksi.plat_nomor,
-            tarif_total: Number(oldTransaksi.tarif_total),
-            tarif_jatah_karyawan: Number(oldTransaksi.tarif_jatah_karyawan),
-            tarif_jatah_pemilik: Number(oldTransaksi.tarif_jatah_pemilik),
-          }
-        : undefined,
-      newValue: {
-        jenis_kendaraan_id: params.jenisKendaraanId,
-        plat_nomor: params.platNomor,
-        tarif_total: Number(jenisKendaraan.tarif_default),
-        tarif_jatah_karyawan: Number(jenisKendaraan.jatah_karyawan),
-        tarif_jatah_pemilik: Number(jenisKendaraan.jatah_pemilik),
+      description: `Admin mengubah transaksi plat "${platNomor ?? oldTransaksi.plat_nomor ?? "-"}"`,
+      oldValue: {
+        jenis_kendaraan_id: oldTransaksi.jenis_kendaraan_id,
+        plat_nomor: oldTransaksi.plat_nomor,
+        tarif_total: Number(oldTransaksi.tarif_total),
+        tarif_jatah_karyawan: Number(oldTransaksi.tarif_jatah_karyawan),
+        tarif_jatah_pemilik: Number(oldTransaksi.tarif_jatah_pemilik),
       },
+      newValue,
     });
   } catch (error) {
+    await connection.rollback();
     console.error("Update transaksi error:", error);
     return { error: "Gagal mengubah transaksi" };
+  } finally {
+    connection.release();
   }
 
   revalidatePath("/admin/rekap");
@@ -392,16 +437,29 @@ export async function updateTransaksi(params: {
 
 export async function deleteTransaksi(id: string) {
   const { error: authError, user: currentUser } = await requireAdmin();
-  if (authError) return { error: authError };
+  if (authError || !currentUser) return { error: authError ?? "Anda harus login" };
+  if (!UUID_PATTERN.test(id)) return { error: "ID transaksi tidak valid" };
+
+  const connection = await pool.getConnection();
+  let target: RowDataPacket | undefined;
 
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT plat_nomor, tarif_total, tarif_jatah_karyawan, tarif_jatah_pemilik, kasir_id FROM transaksi WHERE id = ? LIMIT 1",
+    await connection.beginTransaction();
+    const [rows] = await connection.query<RowDataPacket[]>(
+      `SELECT plat_nomor, tarif_total, tarif_jatah_karyawan,
+              tarif_jatah_pemilik, kasir_id
+       FROM transaksi WHERE id = ? LIMIT 1 FOR UPDATE`,
       [id],
     );
-    const target = rows[0];
+    target = rows[0];
+    if (!target) {
+      await connection.rollback();
+      return { error: "Transaksi tidak ditemukan" };
+    }
 
-    await pool.query("DELETE FROM transaksi WHERE id = ?", [id]);
+    const [result] = await connection.query<ResultSetHeader>("DELETE FROM transaksi WHERE id = ?", [id]);
+    if (result.affectedRows !== 1) throw new Error("Delete transaksi tidak menghapus satu baris");
+    await connection.commit();
 
     await logActivity({
       actor: toActor(currentUser),
@@ -420,8 +478,11 @@ export async function deleteTransaksi(id: string) {
         : undefined,
     });
   } catch (error) {
+    await connection.rollback();
     console.error("Delete transaksi error:", error);
     return { error: "Gagal menghapus transaksi" };
+  } finally {
+    connection.release();
   }
 
   revalidatePath("/admin/rekap");

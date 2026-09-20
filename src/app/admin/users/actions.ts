@@ -1,283 +1,241 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import pool from "@/lib/db"
 import bcrypt from "bcryptjs"
-import type { RowDataPacket } from "mysql2"
-import { requireAdmin } from "@/lib/authz"
+import type { PoolConnection } from "mysql2/promise"
+import type { ResultSetHeader, RowDataPacket } from "mysql2"
+import pool from "@/lib/db"
+import { requireAdmin, type CurrentUser } from "@/lib/authz"
 import { logActivity, type ActivityActor } from "@/lib/activityLog"
 
-function toActor(user: { id: string; username: string; role: string } | null): ActivityActor {
-  if (!user) return null
-  return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" }
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function toActor(user: CurrentUser): ActivityActor {
+  return { id: user.id, username: user.username, role: user.role }
 }
 
 function validateUsername(username: string): string | null {
-  if (!username || username.length < 3) {
-    return "Username minimal 3 karakter"
-  }
-  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-    return "Username hanya boleh huruf, angka, dan underscore (tanpa spasi atau @)"
-  }
+  if (username.length < 3 || username.length > 64) return "Username harus 3–64 karakter"
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) return "Username hanya boleh berisi huruf, angka, dan underscore"
   return null
 }
 
-export async function createUser(formData: FormData) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
+function validateName(name: string): string | null {
+  return name.length > 255 ? "Nama lengkap maksimal 255 karakter" : null
+}
 
-  const username = (formData.get("username") as string || "").trim()
-  const password = formData.get("password") as string
-  const namaLengkap = (formData.get("nama_lengkap") as string || "").trim()
-  const role = formData.get("role") as string
+function validatePassword(password: string): string | null {
+  if (password.length < 8) return "Password minimal 8 karakter"
+  if (password.length > 128) return "Password maksimal 128 karakter"
+  return null
+}
 
-  const usernameError = validateUsername(username)
-  if (usernameError) return { error: usernameError }
+function mysqlCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}
 
-  if (!password || password.length < 6) {
-    return { error: "Password minimal 6 karakter" }
-  }
+async function protectsLastAdmin(connection: PoolConnection, target: RowDataPacket): Promise<boolean> {
+  if (target.role !== "admin" || !Boolean(target.aktif)) return false
+  const [adminRows] = await connection.query<RowDataPacket[]>(
+    "SELECT id FROM users WHERE role = 'admin' AND aktif = 1 FOR UPDATE",
+  )
+  return adminRows.length <= 1
+}
 
-  if (role !== "kasir" && role !== "admin") {
-    return { error: "Role tidak valid" }
-  }
+function refreshUsers() {
+  revalidatePath("/admin/users")
+  revalidatePath("/admin")
+}
 
-  const newId = crypto.randomUUID()
+export async function createUser(params: { username: string; password: string; namaLengkap: string; role: "admin" | "kasir" }) {
+  const { error: authError, user } = await requireAdmin()
+  if (authError || !user) return { error: authError ?? "Anda harus login" }
+  const username = params.username.trim()
+  const namaLengkap = params.namaLengkap.trim().replace(/\s+/g, " ")
+  const validationError = validateUsername(username) ?? validateName(namaLengkap) ?? validatePassword(params.password)
+  if (validationError) return { error: validationError }
+  if (params.role !== "admin" && params.role !== "kasir") return { error: "Role tidak valid" }
 
+  const id = crypto.randomUUID()
   try {
-    const passwordHash = await bcrypt.hash(password, 10)
-
-    // Instead of using UUID in DB natively (which might fail if UUID() is not standard in old MySQL), we use JS uuid
+    const passwordHash = await bcrypt.hash(params.password, 10)
     await pool.query(
-      "INSERT INTO users (id, username, password_hash, nama_lengkap, role, aktif) VALUES (?, ?, ?, ?, ?, ?)",
-      [newId, username, passwordHash, namaLengkap || null, role, true]
+      "INSERT INTO users (id, username, password_hash, nama_lengkap, role, aktif) VALUES (?, ?, ?, ?, ?, 1)",
+      [id, username, passwordHash, namaLengkap || null, params.role],
     )
-  } catch (error: any) {
+  } catch (error) {
     console.error("Create user error:", error)
-    if (error.code === 'ER_DUP_ENTRY') {
-      return { error: "Username sudah dipakai" }
-    }
+    if (mysqlCode(error) === "ER_DUP_ENTRY") return { error: "Username sudah dipakai" }
     return { error: "Gagal membuat user baru" }
   }
 
-  await logActivity({
-    actor: toActor(currentUser as any),
-    action: "CREATE",
-    entityType: "user",
-    entityId: newId,
-    description: `Menambahkan user baru "${username}" dengan role ${role}`,
-    newValue: { username, nama_lengkap: namaLengkap || null, role },
-  })
+  await logActivity({ actor: toActor(user), action: "CREATE", entityType: "user", entityId: id, description: `Menambahkan user "${username}" sebagai ${params.role}`, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
+  refreshUsers()
+  return { success: true }
+}
 
-  revalidatePath("/admin/users")
+export async function updateUser(params: { userId: string; username: string; namaLengkap: string; role: "admin" | "kasir" }) {
+  const { error: authError, user } = await requireAdmin()
+  if (authError || !user) return { error: authError ?? "Anda harus login" }
+  if (!UUID_PATTERN.test(params.userId)) return { error: "ID user tidak valid" }
+  const username = params.username.trim()
+  const namaLengkap = params.namaLengkap.trim().replace(/\s+/g, " ")
+  const validationError = validateUsername(username) ?? validateName(namaLengkap)
+  if (validationError) return { error: validationError }
+  if (params.role !== "admin" && params.role !== "kasir") return { error: "Role tidak valid" }
+  if (params.userId === user.id && params.role !== "admin") return { error: "Role akun sendiri tidak bisa diturunkan" }
+
+  const connection = await pool.getConnection()
+  let target: RowDataPacket | undefined
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT username, nama_lengkap, role, aktif FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [params.userId])
+    target = rows[0]
+    if (!target) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
+    }
+    if (target.role === "admin" && params.role !== "admin" && await protectsLastAdmin(connection, target)) {
+      await connection.rollback()
+      return { error: "Admin aktif terakhir tidak dapat diubah menjadi kasir" }
+    }
+    const roleChanged = String(target.role) !== params.role
+    const [result] = await connection.query<ResultSetHeader>(
+      "UPDATE users SET username = ?, nama_lengkap = ?, role = ?, session_version = session_version + ? WHERE id = ?",
+      [username, namaLengkap || null, params.role, roleChanged ? 1 : 0, params.userId],
+    )
+    if (result.affectedRows !== 1) throw new Error("Update user tidak mengubah satu baris")
+    if (roleChanged) await connection.query("DELETE FROM mobile_sessions WHERE user_id = ?", [params.userId])
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    console.error("Update user error:", error)
+    if (mysqlCode(error) === "ER_DUP_ENTRY") return { error: "Username sudah dipakai user lain" }
+    return { error: "Gagal memperbarui akun" }
+  } finally {
+    connection.release()
+  }
+
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: params.userId, description: `Memperbarui akun "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
+  refreshUsers()
   return { success: true }
 }
 
 export async function resetPassword(userId: string, newPassword: string) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
+  const { error: authError, user } = await requireAdmin()
+  if (authError || !user) return { error: authError ?? "Anda harus login" }
+  if (!UUID_PATTERN.test(userId)) return { error: "ID user tidak valid" }
+  const passwordError = validatePassword(newPassword)
+  if (passwordError) return { error: passwordError }
 
-  if (!newPassword || newPassword.length < 6) {
-    return { error: "Password minimal 6 karakter" }
-  }
-
+  const passwordHash = await bcrypt.hash(newPassword, 10)
+  const connection = await pool.getConnection()
+  let username = ""
   try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT username FROM users WHERE id = ? LIMIT 1",
-      [userId]
-    )
-    const targetUsername = rows[0]?.username ?? null
-
-    const passwordHash = await bcrypt.hash(newPassword, 10)
-    await pool.query(
-      "UPDATE users SET password_hash = ? WHERE id = ?",
-      [passwordHash, userId]
-    )
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "UPDATE",
-      entityType: "user",
-      entityId: userId,
-      description: `Reset password untuk user "${targetUsername ?? userId}"`,
-    })
-  } catch (error) {
-    console.error("Reset password error:", error)
-    return { error: "Gagal reset password" }
-  }
-
-  return { success: true }
-}
-
-export async function updateUserRole(userId: string, newRole: string) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
-
-  if (newRole !== "kasir" && newRole !== "admin") {
-    return { error: "Role tidak valid" }
-  }
-
-  if ((currentUser as any).id === userId && newRole !== "admin") {
-    return { error: "Tidak bisa mengubah role akun sendiri" }
-  }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT username, role FROM users WHERE id = ? LIMIT 1",
-      [userId]
-    )
-    const target = rows[0]
-
-    await pool.query(
-      "UPDATE users SET role = ? WHERE id = ?",
-      [newRole, userId]
-    )
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "UPDATE",
-      entityType: "user",
-      entityId: userId,
-      description: `Mengubah role user "${target?.username ?? userId}" dari ${target?.role ?? "?"} menjadi ${newRole}`,
-      oldValue: target ? { role: target.role } : undefined,
-      newValue: { role: newRole },
-    })
-  } catch (error) {
-    console.error("Update role error:", error)
-    return { error: "Gagal mengubah role" }
-  }
-
-  revalidatePath("/admin/users")
-  return { success: true }
-}
-
-export async function toggleAktifUser(userId: string, aktif: boolean) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
-
-  if ((currentUser as any).id === userId && !aktif) {
-    return { error: "Tidak bisa menonaktifkan akun sendiri" }
-  }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT username, aktif FROM users WHERE id = ? LIMIT 1",
-      [userId]
-    )
-    const target = rows[0]
-
-    await pool.query(
-      "UPDATE users SET aktif = ? WHERE id = ?",
-      [aktif, userId]
-    )
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "UPDATE",
-      entityType: "user",
-      entityId: userId,
-      description: `${aktif ? "Mengaktifkan" : "Menonaktifkan"} user "${target?.username ?? userId}"`,
-      oldValue: target ? { aktif: Boolean(target.aktif) } : undefined,
-      newValue: { aktif },
-    })
-  } catch (error) {
-    console.error("Toggle aktif user error:", error)
-    return { error: "Gagal mengubah status user" }
-  }
-
-  revalidatePath("/admin/users")
-  return { success: true }
-}
-
-export async function updateUserProfile(params: {
-  userId: string
-  newUsername: string
-  newNamaLengkap: string
-}) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
-
-  const username = params.newUsername.trim()
-  const namaLengkap = params.newNamaLengkap.trim()
-
-  const usernameError = validateUsername(username)
-  if (usernameError) return { error: usernameError }
-
-  try {
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT username, nama_lengkap FROM users WHERE id = ? LIMIT 1",
-      [params.userId]
-    )
-    const target = rows[0]
-
-    await pool.query(
-      "UPDATE users SET username = ?, nama_lengkap = ? WHERE id = ?",
-      [username, namaLengkap || null, params.userId]
-    )
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "UPDATE",
-      entityType: "user",
-      entityId: params.userId,
-      description: `Mengubah profil user "${target?.username ?? params.userId}"`,
-      oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap } : undefined,
-      newValue: { username, nama_lengkap: namaLengkap || null },
-    })
-  } catch (error: any) {
-    console.error("Update profile error:", error)
-    if (error.code === 'ER_DUP_ENTRY') {
-      return { error: "Username sudah dipakai user lain" }
+    await connection.beginTransaction()
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT username FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId])
+    if (!rows[0]) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
     }
-    return { error: "Gagal mengubah profile" }
+    username = String(rows[0].username)
+    const [result] = await connection.query<ResultSetHeader>("UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?", [passwordHash, userId])
+    if (result.affectedRows !== 1) throw new Error("Reset password tidak mengubah satu baris")
+    await connection.query("DELETE FROM mobile_sessions WHERE user_id = ?", [userId])
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    console.error("Reset password error:", error)
+    return { error: "Gagal mereset password" }
+  } finally {
+    connection.release()
   }
 
-  revalidatePath("/admin/users")
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `Mereset password dan mencabut sesi aktif user "${username}"` })
+  return { success: true }
+}
+
+export async function setUserActive(userId: string, aktif: boolean) {
+  const { error: authError, user } = await requireAdmin()
+  if (authError || !user) return { error: authError ?? "Anda harus login" }
+  if (!UUID_PATTERN.test(userId) || typeof aktif !== "boolean") return { error: "Data status tidak valid" }
+  if (user.id === userId && !aktif) return { error: "Akun sendiri tidak bisa dinonaktifkan" }
+
+  const connection = await pool.getConnection()
+  let target: RowDataPacket | undefined
+  try {
+    await connection.beginTransaction()
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT username, role, aktif FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId])
+    target = rows[0]
+    if (!target) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
+    }
+    if (!aktif && await protectsLastAdmin(connection, target)) {
+      await connection.rollback()
+      return { error: "Admin aktif terakhir tidak dapat dinonaktifkan" }
+    }
+    const revokeSessions = !aktif && Boolean(target.aktif)
+    const [result] = await connection.query<ResultSetHeader>(
+      "UPDATE users SET aktif = ?, session_version = session_version + ? WHERE id = ?",
+      [aktif, revokeSessions ? 1 : 0, userId],
+    )
+    if (result.affectedRows !== 1) throw new Error("Update status tidak mengubah satu baris")
+    if (!aktif) await connection.query("DELETE FROM mobile_sessions WHERE user_id = ?", [userId])
+    await connection.commit()
+  } catch (error) {
+    await connection.rollback()
+    console.error("Update status user error:", error)
+    return { error: "Gagal mengubah status user" }
+  } finally {
+    connection.release()
+  }
+
+  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `${aktif ? "Mengaktifkan" : "Menonaktifkan"} user "${target?.username}"`, oldValue: { aktif: Boolean(target?.aktif) }, newValue: { aktif } })
+  refreshUsers()
   return { success: true }
 }
 
 export async function deleteUser(userId: string) {
-  const { error: authError, user: currentUser } = await requireAdmin()
-  if (authError) return { error: authError }
+  const { error: authError, user } = await requireAdmin()
+  if (authError || !user) return { error: authError ?? "Anda harus login" }
+  if (!UUID_PATTERN.test(userId)) return { error: "ID user tidak valid" }
+  if (user.id === userId) return { error: "Akun sendiri tidak bisa dihapus" }
 
-  if ((currentUser as any).id === userId) {
-    return { error: "Tidak bisa menghapus akun sendiri" }
-  }
-
+  const connection = await pool.getConnection()
+  let target: RowDataPacket | undefined
   try {
-    const [countRows] = await pool.query<RowDataPacket[]>(
-      "SELECT COUNT(id) as count FROM transaksi WHERE kasir_id = ?",
-      [userId]
-    )
-
-    const count = countRows[0].count
-    if (count > 0) {
-      return {
-        error: `User ini punya ${count} riwayat transaksi dan tidak bisa dihapus permanen (data transaksi akan kehilangan referensi). Gunakan "Nonaktifkan" saja untuk mencegah user ini login, tanpa menghapus riwayatnya.`,
-      }
+    await connection.beginTransaction()
+    const [rows] = await connection.query<RowDataPacket[]>("SELECT username, nama_lengkap, role, aktif FROM users WHERE id = ? LIMIT 1 FOR UPDATE", [userId])
+    target = rows[0]
+    if (!target) {
+      await connection.rollback()
+      return { error: "User tidak ditemukan" }
     }
-
-    const [rows] = await pool.query<RowDataPacket[]>(
-      "SELECT username, nama_lengkap, role FROM users WHERE id = ? LIMIT 1",
-      [userId]
-    )
-    const target = rows[0]
-
-    await pool.query("DELETE FROM users WHERE id = ?", [userId])
-
-    await logActivity({
-      actor: toActor(currentUser as any),
-      action: "DELETE",
-      entityType: "user",
-      entityId: userId,
-      description: `Menghapus user "${target?.username ?? userId}"`,
-      oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined,
-    })
+    if (await protectsLastAdmin(connection, target)) {
+      await connection.rollback()
+      return { error: "Admin aktif terakhir tidak dapat dihapus" }
+    }
+    const [countRows] = await connection.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM transaksi WHERE kasir_id = ?", [userId])
+    const count = Number(countRows[0]?.count ?? 0)
+    if (count > 0) {
+      await connection.rollback()
+      return { error: `Akun memiliki ${count} riwayat transaksi. Nonaktifkan akun agar histori tetap utuh.` }
+    }
+    const [result] = await connection.query<ResultSetHeader>("DELETE FROM users WHERE id = ?", [userId])
+    if (result.affectedRows !== 1) throw new Error("Delete user tidak menghapus satu baris")
+    await connection.commit()
   } catch (error) {
+    await connection.rollback()
     console.error("Delete user error:", error)
     return { error: "Gagal menghapus user" }
+  } finally {
+    connection.release()
   }
 
-  revalidatePath("/admin/users")
+  await logActivity({ actor: toActor(user), action: "DELETE", entityType: "user", entityId: userId, description: `Menghapus user "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined })
+  refreshUsers()
   return { success: true }
 }

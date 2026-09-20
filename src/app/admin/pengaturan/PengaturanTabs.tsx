@@ -1,438 +1,149 @@
 "use client"
 
-import { useState, useRef, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
+import { signOut } from "next-auth/react"
+import { Bell, Clock3, Database, Download, KeyRound, Upload, UserRound } from "lucide-react"
+import { useToast } from "@/components/toast/ToastProvider"
 import { Button } from "@/components/ui/Button"
+import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
+import { Modal } from "@/components/ui/Modal"
 import { useBrowserNotification } from "@/hooks/useBrowserNotification"
-import {
-  updateOwnProfile,
-  updateOwnUsername,
-  changeOwnPassword,
-  fetchAllTransaksiForBackup,
-  restoreTransaksiBackup,
-  updateLoginTimeout,
-  type BackupRow,
-} from "./actions"
+import { MAX_BACKUP_BYTES } from "@/lib/transactionBackup"
+import { changeOwnPassword, fetchAllTransaksiForBackup, restoreTransaksiBackup, updateLoginTimeout, updateOwnAccount } from "./actions"
 
-function SesiTab({ initialMinutes, onResult }: { initialMinutes: number; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [minutes, setMinutes] = useState(String(initialMinutes))
-  const [pending, startTransition] = useTransition()
+type ResultHandler = (message: string, type: "success" | "error") => void
+type Tab = "account" | "session" | "notification" | "backup"
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    startTransition(async () => {
-      const result = await updateLoginTimeout(Number(minutes))
-      if (result.error) onResult(result.error, "error")
-      else onResult("Timeout login berhasil diperbarui", "success")
-    })
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
-      <h3 className="text-sm font-bold text-slate-700 mb-1">Timeout Login</h3>
-      <p className="text-sm text-slate-500 mb-4 max-w-2xl">
-        Admin web dan aplikasi kasir akan logout otomatis jika tidak ada aktivitas selama durasi ini. Nilai bawaan adalah 60 menit.
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
-        <div className="flex-1 space-y-1.5">
-          <label htmlFor="login-timeout" className="text-sm font-medium text-slate-700">Durasi (menit)</label>
-          <Input id="login-timeout" type="number" min={5} max={10080} step={1} required value={minutes} onChange={(e) => setMinutes(e.target.value)} />
-          <p className="text-xs text-slate-400">Minimal 5 menit, maksimal 10.080 menit (7 hari).</p>
-        </div>
-        <Button type="submit" disabled={pending}>{pending ? "Menyimpan..." : "Simpan"}</Button>
-      </form>
-    </div>
-  )
+function Card({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6"><h2 className="font-bold text-slate-900">{title}</h2>{description && <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>}<div className="mt-5">{children}</div></section>
 }
 
-function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
-  useState(() => {
-    const timer = setTimeout(onClose, 3500)
-    return () => clearTimeout(timer)
-  })
-  return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300 ${
-      type === "success" ? "bg-emerald-50/95 border-emerald-200 text-emerald-800" : "bg-red-50/95 border-red-200 text-red-800"
-    }`}>
-      <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="ml-2 text-current opacity-50 hover:opacity-100 transition-opacity">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-      </button>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------
-// TAB: AKUN SAYA
-// ---------------------------------------------------------
-function AkunSayaTab({
-  currentNama,
-  currentUsername,
-  onResult,
-}: {
-  currentNama: string
-  currentUsername: string
-  onResult: (msg: string, type: "success" | "error") => void
-}) {
-  const [namaLengkap, setNamaLengkap] = useState(currentNama)
-  const [namaPending, startNamaTransition] = useTransition()
-
+function AccountTab({ currentName, currentUsername, onResult }: { currentName: string; currentUsername: string; onResult: ResultHandler }) {
+  const [name, setName] = useState(currentName)
   const [username, setUsername] = useState(currentUsername)
-  const [usernamePending, startUsernameTransition] = useTransition() // baru
-
-  const [currentPassword, setCurrentPassword] = useState("")
+  const [profileError, setProfileError] = useState("")
+  const [profilePending, startProfileTransition] = useTransition()
+  const [oldPassword, setOldPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [confirmation, setConfirmation] = useState("")
+  const [passwordError, setPasswordError] = useState("")
   const [passwordPending, startPasswordTransition] = useTransition()
 
-  function handleSaveNama(e: React.FormEvent) {
-    e.preventDefault()
-    startNamaTransition(async () => {
-      const result = await updateOwnProfile(namaLengkap)
-      if (result.error) onResult(result.error, "error")
-      else onResult("Nama berhasil diperbarui", "success")
+  function saveProfile(event: React.FormEvent) {
+    event.preventDefault(); setProfileError("")
+    startProfileTransition(async () => {
+      try {
+        const result = await updateOwnAccount({ namaLengkap: name, username })
+        if (result.error) setProfileError(result.error)
+        else onResult("Profil berhasil diperbarui", "success")
+      } catch { setProfileError("Profil belum tersimpan. Periksa koneksi lalu coba lagi.") }
     })
   }
 
-    function handleSaveUsername(e: React.FormEvent) {
-    e.preventDefault()
-    startUsernameTransition(async () => {
-      const result = await updateOwnUsername(username)
-      if (result.error) onResult(result.error, "error")
-      else onResult("Username berhasil diperbarui", "success")
-    })
-  }
-
-  function handleChangePassword(e: React.FormEvent) {
-    e.preventDefault()
-    setPasswordError(null)
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Konfirmasi password baru tidak cocok")
-      return
-    }
-
+  function savePassword(event: React.FormEvent) {
+    event.preventDefault(); setPasswordError("")
+    if (newPassword !== confirmation) return setPasswordError("Konfirmasi password baru tidak sama")
     startPasswordTransition(async () => {
-      const result = await changeOwnPassword({ currentPassword, newPassword })
-      if (result.error) {
-        setPasswordError(result.error)
-      } else {
-        onResult("Password berhasil diubah", "success")
-        setCurrentPassword("")
-        setNewPassword("")
-        setConfirmPassword("")
-      }
+      try {
+        const result = await changeOwnPassword({ currentPassword: oldPassword, newPassword })
+        if (result.error) return setPasswordError(result.error)
+        onResult("Password berubah. Silakan login kembali.", "success")
+        await signOut({ callbackUrl: "/login?reason=password-changed" })
+      } catch { setPasswordError("Password belum berubah. Periksa koneksi lalu coba lagi.") }
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
-        <h3 className="text-sm font-bold text-slate-700 mb-4">Nama Lengkap</h3>
-        <form onSubmit={handleSaveNama} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
-          <div className="flex-1 space-y-1.5">
-            <Input value={namaLengkap} onChange={(e) => setNamaLengkap(e.target.value)} placeholder="Nama lengkap Anda" />
-          </div>
-          <Button type="submit" disabled={namaPending} className="h-11 sm:h-auto w-full sm:w-auto">
-            {namaPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </form>
-      </div>
-
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
-  <h3 className="text-sm font-bold text-slate-700 mb-4">Username</h3>
-  <form onSubmit={handleSaveUsername} className="flex flex-col sm:flex-row gap-3 sm:items-end max-w-md">
-    <div className="flex-1 space-y-1.5">
-      <Input
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="Username untuk login"
-        autoComplete="username"
-      />
-    </div>
-    <Button type="submit" disabled={usernamePending} className="h-11 sm:h-auto w-full sm:w-auto">
-      {usernamePending ? "Menyimpan..." : "Simpan"}
-    </Button>
-  </form>
-</div>
-
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
-        <h3 className="text-sm font-bold text-slate-700 mb-4">Ubah Password</h3>
-        <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-          {passwordError && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">{passwordError}</div>
-          )}
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Password Lama</label>
-            <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Password Baru</label>
-            <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} required />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">Konfirmasi Password Baru</label>
-            <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={6} required />
-          </div>
-          <Button type="submit" disabled={passwordPending}>
-            {passwordPending ? "Menyimpan..." : "Ubah Password"}
-          </Button>
-        </form>
-      </div>
-    </div>
-  )
+  return <div className="grid gap-4 lg:grid-cols-2">
+    <Card title="Profil akun" description="Nama tampil pada aktivitas, sedangkan username digunakan untuk login."><form onSubmit={saveProfile} className="space-y-4">{profileError && <ErrorNotice message={profileError} />}<div><label className="field-label" htmlFor="setting-name">Nama lengkap</label><Input id="setting-name" value={name} maxLength={255} onChange={(event) => setName(event.target.value)} placeholder="Nama lengkap" /></div><div><label className="field-label" htmlFor="setting-username">Username</label><Input id="setting-username" value={username} minLength={3} maxLength={64} autoCapitalize="none" autoCorrect="off" onChange={(event) => setUsername(event.target.value)} /></div><Button type="submit" className="w-full sm:w-auto" isLoading={profilePending}>Simpan profil</Button></form></Card>
+    <Card title="Ubah password" description="Setelah password berubah, semua sesi web dan mobile akan dikeluarkan."><form onSubmit={savePassword} className="space-y-4">{passwordError && <ErrorNotice message={passwordError} />}<div><label className="field-label" htmlFor="old-password">Password sekarang</label><Input id="old-password" type="password" autoComplete="current-password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} /></div><div><label className="field-label" htmlFor="new-password">Password baru</label><Input id="new-password" type="password" minLength={8} maxLength={128} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Minimal 8 karakter" /></div><div><label className="field-label" htmlFor="confirm-password">Ulangi password baru</label><Input id="confirm-password" type="password" minLength={8} maxLength={128} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div><Button type="submit" className="w-full sm:w-auto" isLoading={passwordPending}><KeyRound size={17} /> Ubah password</Button></form></Card>
+  </div>
 }
 
-// ---------------------------------------------------------
-// TAB: NOTIFIKASI
-// ---------------------------------------------------------
-function NotifikasiTab({ onResult }: { onResult: (msg: string, type: "success" | "error") => void }) {
-  const { supported, enabled, permission, toggle } = useBrowserNotification()
-
-  async function handleToggle() {
-    await toggle()
-    if (permission === "denied") {
-      onResult("Izin notifikasi ditolak. Aktifkan manual di pengaturan browser.", "error")
-    } else if (permission === "granted" || !enabled) {
-      onResult(enabled ? "Notifikasi browser dimatikan" : "Notifikasi browser diaktifkan", "success")
-    }
+function SessionTab({ initialMinutes, onResult }: { initialMinutes: number; onResult: ResultHandler }) {
+  const [minutes, setMinutes] = useState(String(initialMinutes))
+  const [error, setError] = useState("")
+  const [pending, startTransition] = useTransition()
+  function save(event: React.FormEvent) {
+    event.preventDefault(); setError("")
+    startTransition(async () => {
+      try {
+        const result = await updateLoginTimeout(Number(minutes))
+        if (result.error) setError(result.error)
+        else onResult("Durasi logout otomatis diperbarui", "success")
+      } catch { setError("Pengaturan belum tersimpan. Coba lagi.") }
+    })
   }
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-700 mb-1">Notifikasi Browser</h3>
-            <p className="text-sm text-slate-500 max-w-md">
-              Tampilkan notifikasi native desktop/mobile saat ada transaksi baru dari kasir.
-              Notifikasi tetap muncul sebagai toast di dalam aplikasi meskipun ini dimatikan.
-            </p>
-            {!supported && (
-              <p className="text-xs text-amber-600 mt-2">Browser Anda tidak mendukung notifikasi web.</p>
-            )}
-            {supported && permission === "denied" && (
-              <p className="text-xs text-red-600 mt-2">
-                Izin notifikasi pernah ditolak. Buka pengaturan browser → Privasi & Security → Notifikasi → Izinkan situs ini.
-              </p>
-            )}
-          </div>
-          <button
-            onClick={handleToggle}
-            disabled={!supported || permission === "denied"}
-            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-              enabled ? "bg-yellow-400" : "bg-slate-200"
-            }`}
-          >
-            <span
-              className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                enabled ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-        <div className="mt-4 flex items-center gap-2 text-xs text-slate-400">
-          <span className={`w-2 h-2 rounded-full ${enabled ? "bg-emerald-500" : "bg-slate-300"}`} />
-          Status: {enabled ? "Aktif" : "Nonaktif"}
-          {permission === "granted" && enabled && (
-            <span className="text-emerald-600 font-medium"> — Notifikasi browser akan muncul</span>
-          )}
-        </div>
-      </div>
-
-      <div className="bg-yellow-50/50 rounded-xl border border-yellow-100 p-6">
-        <h3 className="text-sm font-bold text-yellow-700 mb-2">Cara Kerja</h3>
-        <ul className="text-sm text-yellow-700/80 space-y-1.5 list-disc list-inside">
-          <li>Saat kasir mencatat transaksi baru, sistem akan mengirim notifikasi realtime</li>
-          <li>Toast in-app selalu muncul di pojok kanan bawah</li>
-          <li>Notifikasi browser (native) hanya muncul jika toggle di atas diaktifkan</li>
-          <li>Suara notifikasi otomatis dimainkan saat ada transaksi baru</li>
-          <li>Data tetap realtime meskipun notifikasi browser dimatikan</li>
-        </ul>
-      </div>
-    </div>
-  )
+  return <Card title="Logout otomatis" description="Sesi admin web dan aplikasi kasir berakhir bila tidak ada aktivitas selama durasi ini. Tab yang ditutup atau berada di latar belakang tetap dihitung."><form onSubmit={save} className="max-w-lg space-y-4">{error && <ErrorNotice message={error} />}<div className="grid grid-cols-4 gap-2">{[15,30,60,120].map((value) => <button key={value} type="button" aria-pressed={minutes===String(value)} onClick={() => setMinutes(String(value))} className={`min-h-11 rounded-xl border text-sm font-semibold ${minutes===String(value) ? "border-yellow-400 bg-yellow-50 text-slate-950" : "border-slate-200 text-slate-600"}`}>{value < 60 ? `${value} mnt` : `${value/60} jam`}</button>)}</div><div><label className="field-label" htmlFor="timeout-minutes">Durasi khusus (menit)</label><Input id="timeout-minutes" type="number" min={5} max={10080} inputMode="numeric" value={minutes} onChange={(event) => setMinutes(event.target.value)} /><p className="mt-1.5 text-xs text-slate-500">Minimal 5 menit, maksimal 7 hari.</p></div><Button type="submit" className="w-full sm:w-auto" isLoading={pending}><Clock3 size={17} /> Simpan durasi</Button></form></Card>
 }
 
-// ---------------------------------------------------------
-// TAB: BACKUP & PEMULIHAN
-// ---------------------------------------------------------
-function BackupPemulihanTab({ onResult }: { onResult: (msg: string, type: "success" | "error") => void }) {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isExporting, setIsExporting] = useState(false)
-  const [restoreFile, setRestoreFile] = useState<File | null>(null)
-  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
-  const [isRestoring, startRestoreTransition] = useTransition()
+function NotificationTab({ onResult }: { onResult: ResultHandler }) {
+  const { supported, enabled, permission, toggle } = useBrowserNotification()
+  async function handleToggle() {
+    if (permission === "denied") return onResult("Izin notifikasi diblokir oleh browser. Ubah melalui pengaturan situs.", "error")
+    await toggle()
+    onResult(enabled ? "Notifikasi browser dimatikan" : "Preferensi notifikasi browser diperbarui", "success")
+  }
+  return <Card title="Notifikasi transaksi" description="Tampilkan notifikasi perangkat ketika kasir mencatat transaksi baru. Toast di dalam aplikasi tetap muncul."><div className="flex items-center justify-between gap-4 rounded-xl bg-slate-50 p-4"><div><p className="text-sm font-semibold text-slate-800">Notifikasi browser</p><p className="mt-1 text-xs text-slate-500">{!supported ? "Browser ini tidak mendukung notifikasi." : permission === "denied" ? "Izin diblokir di pengaturan browser." : enabled ? "Aktif pada perangkat ini." : "Nonaktif pada perangkat ini."}</p></div><button type="button" role="switch" aria-checked={enabled} onClick={() => void handleToggle()} disabled={!supported || permission === "denied"} className={`relative h-7 w-12 shrink-0 rounded-full ${enabled ? "bg-yellow-400" : "bg-slate-300"} disabled:opacity-40`}><span className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-transform ${enabled ? "translate-x-5" : "translate-x-0.5"}`} /></button></div><p className="mt-4 text-xs leading-5 text-slate-500">Pengaturan tersimpan hanya pada browser dan perangkat yang sedang digunakan.</p></Card>
+}
 
-  async function handleExportBackup() {
-    setIsExporting(true)
+function BackupTab({ onResult }: { onResult: ResultHandler }) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [restoring, startRestore] = useTransition()
+
+  async function download() {
+    setExporting(true)
     try {
       const result = await fetchAllTransaksiForBackup()
-      if (result.error) {
-        onResult(result.error, "error")
-        return
-      }
-      const json = JSON.stringify(result.data, null, 2)
-      const blob = new Blob([json], { type: "application/json" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `backup-transaksi-${new Date().toISOString().slice(0, 10)}.json`
-      a.click()
-      URL.revokeObjectURL(url)
-      onResult(`Backup ${result.data.length} transaksi berhasil di-download`, "success")
-    } finally {
-      setIsExporting(false)
-    }
+      if (result.error) return onResult(result.error, "error")
+      const url = URL.createObjectURL(new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" }))
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `transaksi-bujon-${new Date().toISOString().slice(0,10)}.json`; anchor.click(); URL.revokeObjectURL(url)
+      onResult(`${result.data.length} transaksi berhasil disalin`, "success")
+    } catch { onResult("Salinan transaksi gagal disiapkan", "error") }
+    finally { setExporting(false) }
   }
 
-  function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) {
-      setRestoreFile(file)
-      setShowRestoreConfirm(true)
-    }
+  function selectFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0]
+    if (!selected) return
+    if (selected.size > MAX_BACKUP_BYTES) { event.target.value = ""; return onResult("File terlalu besar. Maksimal 20 MB.", "error") }
+    if (!selected.name.toLowerCase().endsWith(".json")) { event.target.value = ""; return onResult("Pilih file JSON hasil salinan aplikasi.", "error") }
+    setFile(selected)
   }
 
-  function handleRestore() {
-    if (!restoreFile) return
-    startRestoreTransition(async () => {
+  function restore() {
+    if (!file) return
+    startRestore(async () => {
       try {
-        const text = await restoreFile.text()
-        const rows: BackupRow[] = JSON.parse(text)
-        const result = await restoreTransaksiBackup({ rows })
-        if (result.error) {
-          onResult(result.error, "error")
-        } else {
-          onResult(`${result.jumlahRestored} transaksi berhasil di-restore`, "success")
-        }
-      } catch {
-        onResult("File tidak valid atau bukan format JSON backup yang benar", "error")
-      }
-      setShowRestoreConfirm(false)
-      setRestoreFile(null)
-      if (fileInputRef.current) fileInputRef.current.value = ""
+        const parsed: unknown = JSON.parse(await file.text())
+        const result = await restoreTransaksiBackup({ rows: parsed })
+        if (result.error) onResult(result.error, "error")
+        else onResult(`${result.jumlahRestored} transaksi ditambahkan, ${result.jumlahSkipped} duplikat dilewati`, "success")
+      } catch { onResult("File tidak valid atau rusak.", "error") }
+      finally { setFile(null); if (fileRef.current) fileRef.current.value = "" }
     })
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Backup */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-700 mb-1">Export Backup</h3>
-        <p className="text-sm text-slate-500 mb-4">Download semua data transaksi sebagai file JSON dan simpan file ini di tempat aman.</p>
-        <Button variant="outline" onClick={handleExportBackup} disabled={isExporting}>
-          {isExporting ? "Menyiapkan..." : "Download Backup"}
-        </Button>
-      </div>
-
-      {/* Restore */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-700 mb-1">Restore dari Backup</h3>
-        <p className="text-sm text-slate-500 mb-4">Upload file JSON backup yang pernah di-download sebelumnya untuk mengembalikan data transaksi.</p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/json"
-          onChange={handleFileSelected}
-          className="hidden"
-        />
-        <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-          Pilih File Backup
-        </Button>
-      </div>
-
-      {/* Modal konfirmasi restore */}
-      {showRestoreConfirm && restoreFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-y-auto border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-            <div className="px-6 py-5">
-              <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-              </div>
-              <h2 className="text-lg font-bold text-slate-900">Restore dari &quot;{restoreFile.name}&quot;</h2>
-              <p className="text-sm text-slate-500 mt-2">Data backup akan ditambahkan dengan aman. Transaksi yang sudah ada tidak akan dihapus atau ditimpa.</p>
-            </div>
-            <div className="px-6 pb-6 flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                onClick={() => { setShowRestoreConfirm(false); setRestoreFile(null); if (fileInputRef.current) fileInputRef.current.value = "" }}
-                disabled={isRestoring}
-              >
-                Batal
-              </Button>
-              <Button
-                type="button"
-                className="flex-1"
-                onClick={handleRestore}
-                disabled={isRestoring}
-              >
-                {isRestoring ? "Merestore..." : "Ya, Restore"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  )
+  return <div className="grid gap-4 lg:grid-cols-2"><Card title="Salin transaksi" description="Unduh transaksi sebagai JSON untuk pemulihan tambahan."><Button variant="outline" className="w-full sm:w-auto" onClick={() => void download()} isLoading={exporting}><Download size={17} /> Unduh JSON</Button></Card><Card title="Pulihkan transaksi" description="Transaksi baru ditambahkan; ID yang sudah ada dilewati tanpa menimpa data."><input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={selectFile} /><Button variant="outline" className="w-full sm:w-auto" onClick={() => fileRef.current?.click()}><Upload size={17} /> Pilih file JSON</Button></Card><div className="lg:col-span-2 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Backup operasional:</strong> file ini hanya berisi transaksi dan membutuhkan user serta jenis kendaraan yang sesuai. Tetap aktifkan backup database terjadwal di hosting.</div>{file && <Modal title="Pulihkan transaksi?" onClose={() => setFile(null)} busy={restoring} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => setFile(null)} disabled={restoring}>Batal</Button><Button onClick={restore} isLoading={restoring}>Pulihkan</Button></div>}><div className="space-y-3"><p className="text-sm text-slate-600">File <strong>{file.name}</strong> akan diperiksa seluruhnya sebelum data ditambahkan.</p><p className="text-xs text-slate-500">Ukuran: {(file.size/1024).toLocaleString("id-ID", {maximumFractionDigits:1})} KB</p></div></Modal>}</div>
 }
 
-// ---------------------------------------------------------
-// MAIN
-// ---------------------------------------------------------
-export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinutes }: { currentNama: string, currentUsername: string, loginTimeoutMinutes: number }) {
-  const [activeTab, setActiveTab] = useState<"akun" | "sesi" | "notifikasi" | "backup">("akun")
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
+const tabs = [
+  { id: "account", label: "Akun", icon: UserRound },
+  { id: "session", label: "Sesi", icon: Clock3 },
+  { id: "notification", label: "Notifikasi", icon: Bell },
+  { id: "backup", label: "Data", icon: Database },
+] as const
 
-  const showToast = (message: string, type: "success" | "error") => setToast({ message, type })
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-        <button
-          onClick={() => setActiveTab("sesi")}
-          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-            activeTab === "sesi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Sesi Login
-        </button>
-        <button
-          onClick={() => setActiveTab("akun")}
-          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-            activeTab === "akun" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Akun Saya
-        </button>
-        <button
-          onClick={() => setActiveTab("notifikasi")}
-          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-            activeTab === "notifikasi" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Notifikasi
-        </button>
-        <button
-          onClick={() => setActiveTab("backup")}
-          className={`min-h-11 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors ${
-            activeTab === "backup" ? "bg-yellow-400 text-slate-900" : "bg-white text-slate-600 border border-slate-200"
-          }`}
-        >
-          Backup & Pemulihan
-        </button>
-      </div>
-
-      {activeTab === "akun" && <AkunSayaTab currentNama={currentNama} currentUsername={currentUsername} onResult={showToast} />}
-      {activeTab === "sesi" && <SesiTab initialMinutes={loginTimeoutMinutes} onResult={showToast} />}
-      {activeTab === "notifikasi" && <NotifikasiTab onResult={showToast} />}
-      {activeTab === "backup" && <BackupPemulihanTab onResult={showToast} />}
-
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-    </div>
-  )
+export function PengaturanTabs({ currentNama, currentUsername, loginTimeoutMinutes }: { currentNama: string; currentUsername: string; loginTimeoutMinutes: number }) {
+  const [active, setActive] = useState<Tab>("account")
+  const { addToast } = useToast()
+  return <div className="space-y-4">
+    <div className="grid grid-cols-4 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm" role="tablist">{tabs.map(({ id, label, icon: Icon }) => <button key={id} type="button" role="tab" aria-selected={active===id} onClick={() => setActive(id)} className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-semibold sm:min-h-11 sm:flex-row sm:text-sm ${active===id ? "bg-yellow-400 text-slate-950" : "text-slate-500 hover:bg-slate-50"}`}><Icon size={17} />{label}</button>)}</div>
+    {active === "account" && <AccountTab currentName={currentNama} currentUsername={currentUsername} onResult={addToast} />}
+    {active === "session" && <SessionTab initialMinutes={loginTimeoutMinutes} onResult={addToast} />}
+    {active === "notification" && <NotificationTab onResult={addToast} />}
+    {active === "backup" && <BackupTab onResult={addToast} />}
+  </div>
 }

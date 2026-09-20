@@ -8,14 +8,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
 }
 
 
@@ -54,27 +54,6 @@ textarea {
 .break-anywhere {
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-/* Better mobile tap targets */
-@media (max-width: 767px) {
-  button,
-  [role="button"] {
-    min-height: 40px;
-  }
-
-  /* Avoid accidental horizontal overflow from charts/large content */
-  svg,
-  canvas {
-    max-width: 100%;
-  }
-}
-
-/* Respect devices with a bottom safe-area, especially iPhones */
-@supports (padding: env(safe-area-inset-bottom)) {
-  body {
-    padding-bottom: env(safe-area-inset-bottom);
-  }
 }
 
 /* ─── Skeleton shimmer animation ─────────────────────────────────────────── */
@@ -123,23 +102,6 @@ textarea {
   border-radius: 0 2px 2px 0;
 }
 
-/* ─── Smooth page transitions ──────────────────────────────────────────────── */
-/* @keyframes pageEnter {
-  from {
-    opacity: 0;
-    
-    margin-top: 10px;
-  }
-  to {
-    opacity: 1;
-    margin-top: 0;
-  }
-} */
-
-.animate-page-enter {
-  animation: pageEnter 0.4s ease-out both;
-}
-
 /* ─── Performance: Disable animations for users who prefer reduced motion ─── */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -151,33 +113,24 @@ textarea {
   }
 }
 
-/* ─── Touch-friendly improvements ─── */
-@media (hover: none) and (pointer: coarse) {
-  /* Di touch device, hover effect tidak perlu — tap sudah cukup */
-  .hover-lift {
-    transform: none !important;
-  }
-  
-  /* Pastikan tap target minimal 44px (Apple HIG) */
-  button, 
-  [role="button"],
-  a {
-    min-height: 44px;
-    min-width: 44px;
-  }
-}
-
-/* ─── Smooth scroll hanya di device yang mendukung ─── */
-@media (prefers-reduced-motion: no-preference) {
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
-/* ─── Optimize animations for low-end devices ─── */
-@media (max-width: 640px) {
-  /* Animasi lebih singkat di HP */
-  .animate-page-enter {
-    animation-duration: 0.25s;
-  }
+/* Shared admin controls */
+.field-label { display: block; margin-bottom: .4rem; font-size: .875rem; font-weight: 500; color: #475569; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: .75rem; color: #475569; touch-action: manipulation; }
+.icon-button:hover { background: #f1f5f9; }
+button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 2px solid #ca8a04; outline-offset: 3px; }
+button, a, summary { touch-action: manipulation; }
+.app-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(32rem, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 3rem); border: 1px solid #e2e8f0; border-radius: 1rem; background: white; color: #0f172a; overflow: hidden; box-shadow: 0 24px 64px #0f172a33; }
+.app-dialog-wide { width: min(72rem, calc(100% - 3rem)); }
+.app-dialog::backdrop { background: #0f172a80; backdrop-filter: blur(3px); }
+.app-dialog-frame { display: flex; flex-direction: column; max-height: calc(100dvh - 3rem); }
+.dialog-footer { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.admin-scroll { scrollbar-gutter: stable; }
+@media (max-width: 767px) {
+  .app-dialog { inset: auto 0 0; margin: 0; width: 100%; max-height: calc(100dvh - max(12px, env(safe-area-inset-top))); border-radius: 1.25rem 1.25rem 0 0; }
+  .app-dialog-frame { max-height: calc(100dvh - max(12px, env(safe-area-inset-top))); }
+  .app-dialog[data-fullscreen] { inset: 0; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .app-dialog[data-fullscreen] .app-dialog-frame { height: 100%; max-height: 100dvh; padding-top: env(safe-area-inset-top); }
+  .admin-scroll { scrollbar-gutter: auto; padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  input:not([type=checkbox]):not([type=radio]), select, textarea { font-size: 16px !important; }
 }
