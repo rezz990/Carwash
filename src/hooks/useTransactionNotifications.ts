@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 export type NewTransactionEvent = {
   id: string;
@@ -22,8 +22,7 @@ export function useTransactionNotifications(
   onNewTransaction: (data: NewTransactionEvent) => void
 ) {
   const [connected, setConnected] = useState(false);
-  const callbackRef = useRef(onNewTransaction);
-  callbackRef.current = onNewTransaction;
+  const handleTransaction = useEffectEvent(onNewTransaction);
 
   useEffect(() => {
     const eventSource = new EventSource("/api/admin/notifications/stream");
@@ -33,7 +32,7 @@ export function useTransactionNotifications(
     eventSource.onmessage = (event) => {
       try {
         const data: NewTransactionEvent = JSON.parse(event.data);
-        callbackRef.current(data);
+        handleTransaction(data);
       } catch (err) {
         console.error("Gagal parse notifikasi SSE:", err);
       }

@@ -1,630 +1,155 @@
 "use client"
 
-import { useState, useTransition, useEffect } from "react"
+import { useMemo, useState, useTransition } from "react"
+import { KeyRound, Pencil, Plus, Power, Search, ShieldCheck, Trash2, UserRound } from "lucide-react"
+import { useToast } from "@/components/toast/ToastProvider"
 import { Button } from "@/components/ui/Button"
+import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
-import { createUser, resetPassword, updateUserRole, toggleAktifUser, updateUserProfile, deleteUser } from "./actions"
+import { Modal } from "@/components/ui/Modal"
+import { createUser, deleteUser, resetPassword, setUserActive, updateUser } from "./actions"
 
-type UserProfile = {
+export type UserProfile = {
   id: string
   username: string
   nama_lengkap: string | null
-  role: string
+  role: "admin" | "kasir"
   aktif: boolean
   created_at: string
 }
 
-function Toast({ message, type, onClose }: { message: string; type: "success" | "error"; onClose: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 3500)
-    return () => clearTimeout(timer)
-  }, [onClose])
-
-  return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300 ${
-      type === "success"
-        ? "bg-emerald-50/95 border-emerald-200 text-emerald-800"
-        : "bg-red-50/95 border-red-200 text-red-800"
-    }`}>
-      <span className="text-sm font-medium">{message}</span>
-      <button onClick={onClose} className="ml-2 text-current opacity-50 hover:opacity-100 transition-opacity">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>
-      </button>
-    </div>
-  )
-}
-
-// Modal tambah user baru
-function AddUserForm({ onClose, onResult }: { onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
-  const [namaLengkap, setNamaLengkap] = useState("")
-  const [role, setRole] = useState("kasir")
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  function handleSubmit(e: React.SubmitEvent) {
-    e.preventDefault()
-    setError(null)
-
-    const formData = new FormData()
-    formData.append("username", username)
-    formData.append("password", password)
-    formData.append("nama_lengkap", namaLengkap)
-    formData.append("role", role)
-
-    startTransition(async () => {
-      const result = await createUser(formData)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        onResult(`User ${username} berhasil dibuat`, "success")
-        onClose()
-      }
-    })
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-slate-900">Tambah User Baru</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Kembali
-        </button>
-      </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
-            {error}
-          </div>
-          )}
-
-          <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Username</label>
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="misal: kasir2"
-            required
-            autoFocus
-          />
-          <p className="text-xs text-slate-400">Huruf, angka, underscore saja. Tanpa spasi atau @.</p>
-        </div>
-
-          <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nama Lengkap</label>
-          <Input
-            value={namaLengkap}
-            onChange={(e) => setNamaLengkap(e.target.value)}
-            placeholder="Opsional"
-          />
-        </div>
-
-           <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Password</label>
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimal 6 karakter"
-            required
-            minLength={6}
-          />
-        </div>
-
-          <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Role</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setRole("kasir")}
-              className={`h-11 rounded-xl border-2 text-sm font-semibold transition-all ${
-                role === "kasir"
-                  ? "border-yellow-400 bg-yellow-50 text-slate-900"
-                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-              }`}
-            >
-              Kasir
-            </button>
-            <button
-              type="button"
-              onClick={() => setRole("admin")}
-              className={`h-11 rounded-xl border-2 text-sm font-semibold transition-all ${
-                role === "admin"
-                  ? "border-yellow-400 bg-yellow-50 text-slate-900"
-                  : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-              }`}
-            >
-              Admin
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-            Batal
-          </Button>
-          <Button type="submit" className="flex-1" disabled={isPending}>
-            {isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// Modal reset password
-function ResetPasswordForm({ user, onClose, onResult }: { user: UserProfile; onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  function handleSubmit(e: React.SubmitEvent) {
-    e.preventDefault()
-    setError(null)
-
-    startTransition(async () => {
-      const result = await resetPassword(user.id, password)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        onResult(`Password ${user.username} berhasil direset`, "success")
-        onClose()
-      }
-    })
-  }
-
-  return (
-<div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Reset Password</h2>
-          <p className="text-xs text-slate-500">untuk user <span className="font-semibold">{user.username}</span></p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Kembali
-        </button>
-      </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
-            {error}
-          </div>
-        )}
-
-          <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Password Baru</label>
-          <Input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Minimal 6 karakter"
-            required
-            minLength={6}
-            autoFocus
-          />
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-            Batal
-          </Button>
-          <Button type="submit" className="flex-1" disabled={isPending}>
-            {isPending ? "Menyimpan..." : "Reset"}
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// Modal edit akun - ubah username & nama lengkap user yang sudah ada
-// Inline form edit akun - ubah username & nama lengkap user yang sudah ada
-function EditUserForm({ user, onClose, onResult }: { user: UserProfile; onClose: () => void; onResult: (msg: string, type: "success" | "error") => void }) {
-  const [username, setUsername] = useState(user.username)
-  const [namaLengkap, setNamaLengkap] = useState(user.nama_lengkap || "")
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  const usernameChanged = username.trim() !== user.username
-
-  function handleSubmit(e: React.SubmitEvent) {
-    e.preventDefault()
-    setError(null)
-
-    startTransition(async () => {
-      const result = await updateUserProfile({
-        userId: user.id,
-        newUsername: username,
-        newNamaLengkap: namaLengkap,
-      })
-      if (result.error) {
-        setError(result.error)
-      } else {
-        onResult(`Akun ${user.username} berhasil diperbarui`, "success")
-        onClose()
-      }
-    })
-  }
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-slate-900">Edit Akun</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Kembali
-        </button>
-      </div>
-
-        <form onSubmit={handleSubmit} className="px-5 py-5 space-y-4">
-        {error && (
-          <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl">
-            {error}
-          </div>
-        )}
-
-          <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Username</label>
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="misal: kasir2"
-            required
-            autoFocus
-          />
-          <p className="text-xs text-slate-400">Huruf, angka, underscore saja. Tanpa spasi atau @.</p>
-          {usernameChanged && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 mt-1.5">
-              Username dipakai untuk login. Kalau diganti, user harus pakai username baru ini
-              mulai login berikutnya.
-            </p>
-          )}
-        </div>
-
-           <div className="space-y-1.5">
-          <label className="text-sm font-medium text-slate-700">Nama Lengkap</label>
-          <Input
-            value={namaLengkap}
-            onChange={(e) => setNamaLengkap(e.target.value)}
-            placeholder="Opsional"
-          />
-        </div>
-
-        <div className="flex gap-3 pt-2">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isPending}>
-            Batal
-          </Button>
-          <Button type="submit" className="flex-1" disabled={isPending}>
-            {isPending ? "Menyimpan..." : "Simpan"}
-          </Button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// Modal konfirmasi hapus akun - permanen, selalu tampil sebelum eksekusi
-function ConfirmDeleteUserForm({
-  user,
-  onCancel,
-  onConfirm,
-  isPending,
-}: {
-  user: UserProfile
-  onCancel: () => void
-  onConfirm: () => void
-  isPending: boolean
+function UserForm({ user, currentUserId, onClose, onSaved }: {
+  user?: UserProfile
+  currentUserId: string
+  onClose: () => void
+  onSaved: (message: string) => void
 }) {
-  return (
-<div className="bg-white rounded-xl border border-red-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-      <div className="px-5 py-4 border-b border-red-100 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-red-700">Hapus akun {user.username}?</h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-          Kembali
-        </button>
-      </div>
-      <div className="px-5 py-5">
-        <div className="flex items-start gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-50 border border-red-200 flex items-center justify-center shrink-0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-          </div>
-          <div>
-            <p className="text-sm text-slate-600">
-              Akun ini akan dihapus <span className="font-semibold text-red-600">permanen</span> dan tidak bisa
-              login lagi. Tindakan ini tidak bisa dibatalkan.
-            </p>
-            <p className="text-xs text-slate-400 mt-2 bg-slate-50 border border-slate-100 rounded-lg px-3 py-2">
-              Kalau user ini pernah punya riwayat transaksi, penghapusan akan otomatis ditolak sistem — pakai
-              &quot;Nonaktifkan&quot; sebagai gantinya.
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Button type="button" variant="outline" className="flex-1" onClick={onCancel} disabled={isPending}>
-            Batal
-          </Button>
-          <Button
-            type="button"
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-            onClick={onConfirm}
-            disabled={isPending}
-          >
-            {isPending ? "Menghapus..." : "Ya, Hapus Permanen"}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
+  const [username, setUsername] = useState(user?.username ?? "")
+  const [name, setName] = useState(user?.nama_lengkap ?? "")
+  const [role, setRole] = useState<"admin" | "kasir">(user?.role ?? "kasir")
+  const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [pending, startTransition] = useTransition()
+
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    startTransition(async () => {
+      try {
+        const result = user
+          ? await updateUser({ userId: user.id, username, namaLengkap: name, role })
+          : await createUser({ username, namaLengkap: name, role, password })
+        if (result.error) return setError(result.error)
+        onSaved(user ? `Akun ${user.username} diperbarui` : `Akun ${username.trim()} dibuat`)
+      } catch {
+        setError("Perubahan belum tersimpan. Periksa koneksi lalu coba lagi.")
+      }
+    })
+  }
+
+  const self = user?.id === currentUserId
+  return <Modal title={user ? "Edit akun" : "Tambah user"} onClose={onClose} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={onClose} disabled={pending}>Batal</Button><Button type="submit" form="user-form" isLoading={pending}>Simpan</Button></div>}>
+    <form id="user-form" onSubmit={submit} className="space-y-4">
+      {error && <ErrorNotice message={error} />}
+      <div><label className="field-label" htmlFor="user-username">Username</label><Input id="user-username" value={username} minLength={3} maxLength={64} autoCapitalize="none" autoCorrect="off" onChange={(event) => setUsername(event.target.value)} placeholder="contoh: kasir_pagi" autoFocus /></div>
+      <div><label className="field-label" htmlFor="user-name">Nama lengkap</label><Input id="user-name" value={name} maxLength={255} onChange={(event) => setName(event.target.value)} placeholder="Opsional" /></div>
+      {!user && <div><label className="field-label" htmlFor="user-password">Password awal</label><Input id="user-password" type="password" value={password} minLength={8} maxLength={128} autoComplete="new-password" onChange={(event) => setPassword(event.target.value)} placeholder="Minimal 8 karakter" /><p className="mt-1.5 text-xs text-slate-500">Berikan password melalui jalur pribadi dan minta user menggantinya.</p></div>}
+      <fieldset><legend className="field-label">Hak akses</legend><div className="grid grid-cols-2 gap-2">{([['kasir','Kasir'],['admin','Admin']] as const).map(([value,label]) => <button key={value} type="button" aria-pressed={role===value} disabled={self && value !== "admin"} onClick={() => setRole(value)} className={`min-h-12 rounded-xl border-2 px-3 text-sm font-semibold ${role===value ? "border-yellow-400 bg-yellow-50 text-slate-950" : "border-slate-200 text-slate-600"} disabled:opacity-40`}>{label}</button>)}</div></fieldset>
+      {self && <p className="rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">Hak admin akun yang sedang dipakai tidak dapat diturunkan.</p>}
+    </form>
+  </Modal>
 }
 
-function RoleBadge({ role }: { role: string }) {
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-      role === "admin"
-        ? "bg-yellow-50 text-yellow-700 border border-yellow-200"
-        : "bg-slate-100 text-slate-600 border border-slate-200"
-    }`}>
-      {role === "admin" ? "Admin" : "Kasir"}
-    </span>
-  )
+function ResetPasswordModal({ user, onClose, onSaved }: { user: UserProfile; onClose: () => void; onSaved: (message: string) => void }) {
+  const [password, setPassword] = useState("")
+  const [confirmation, setConfirmation] = useState("")
+  const [error, setError] = useState("")
+  const [pending, startTransition] = useTransition()
+  function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError("")
+    if (password !== confirmation) return setError("Konfirmasi password tidak sama")
+    startTransition(async () => {
+      try {
+        const result = await resetPassword(user.id, password)
+        if (result.error) return setError(result.error)
+        onSaved(`Password ${user.username} direset dan semua sesinya dicabut`)
+      } catch {
+        setError("Password belum berubah. Periksa koneksi lalu coba lagi.")
+      }
+    })
+  }
+  return <Modal title={`Reset password ${user.username}`} onClose={onClose} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={onClose} disabled={pending}>Batal</Button><Button type="submit" form="reset-password-form" isLoading={pending}>Reset password</Button></div>}>
+    <form id="reset-password-form" onSubmit={submit} className="space-y-4">{error && <ErrorNotice message={error} />}<p className="text-sm leading-6 text-slate-600">Semua sesi web dan mobile user ini akan dicabut. User harus login ulang memakai password baru.</p><div><label className="field-label" htmlFor="new-user-password">Password baru</label><Input id="new-user-password" type="password" minLength={8} maxLength={128} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Minimal 8 karakter" autoFocus /></div><div><label className="field-label" htmlFor="confirm-user-password">Ulangi password</label><Input id="confirm-user-password" type="password" minLength={8} maxLength={128} autoComplete="new-password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></div></form>
+  </Modal>
 }
 
-function StatusBadge({ aktif }: { aktif: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-      aktif
-        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-        : "bg-slate-100 text-slate-500 border border-slate-200"
-    }`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${aktif ? "bg-emerald-500" : "bg-slate-400"}`} />
-      {aktif ? "Aktif" : "Nonaktif"}
-    </span>
-  )
-}
-
-export function UserTable({ data, currentUserId }: { data: UserProfile[]; currentUserId: string }) {
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [resetPasswordFor, setResetPasswordFor] = useState<UserProfile | null>(null)
-  const [editTarget, setEditTarget] = useState<UserProfile | null>(null)
+export function UserTable({ data, currentUserId, loadError }: { data: UserProfile[]; currentUserId: string; loadError?: string }) {
+  const [query, setQuery] = useState("")
+  const [editor, setEditor] = useState<UserProfile | "new" | null>(null)
+  const [resetTarget, setResetTarget] = useState<UserProfile | null>(null)
+  const [statusTarget, setStatusTarget] = useState<UserProfile | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null)
-  const [isDeletingPending, startDeleteTransition] = useTransition()
-  const [pendingAction, setPendingAction] = useState<Set<string>>(new Set())
-  const [isPending, startTransition] = useTransition()
+  const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [pending, startTransition] = useTransition()
+  const { addToast } = useToast()
+  const filtered = useMemo(() => {
+    const term = query.trim().toLocaleLowerCase("id-ID")
+    return term ? data.filter((user) => `${user.username} ${user.nama_lengkap ?? ""} ${user.role}`.toLocaleLowerCase("id-ID").includes(term)) : data
+  }, [data, query])
 
-  const showToast = (message: string, type: "success" | "error") => {
-    setToast({ message, type })
+  function saved(message: string) {
+    setEditor(null); setResetTarget(null); addToast(message, "success")
   }
 
-  function handleDeleteConfirm() {
-    if (!deleteTarget) return
-    startDeleteTransition(async () => {
-      const result = await deleteUser(deleteTarget.id)
-      if (result.error) {
-        showToast(result.error, "error")
-      } else {
-        showToast(`Akun ${deleteTarget.username} berhasil dihapus`, "success")
-      }
-      setDeleteTarget(null)
-    })
-  }
-
-  const handleRoleChange = (userItem: UserProfile, newRole: string) => {
-    setPendingAction(prev => new Set(prev).add(userItem.id))
+  function applyStatus() {
+    if (!statusTarget) return
+    const target = statusTarget
     startTransition(async () => {
-      const result = await updateUserRole(userItem.id, newRole)
-      if (result.error) {
-        showToast(result.error, "error")
-      } else {
-        showToast(`Role ${userItem.username} diubah jadi ${newRole}`, "success")
-      }
-      setPendingAction(prev => {
-        const next = new Set(prev)
-        next.delete(userItem.id)
-        return next
-      })
+      try {
+        const result = await setUserActive(target.id, !target.aktif)
+        if (result.error) addToast(result.error, "error")
+        else addToast(`${target.username} ${target.aktif ? "dinonaktifkan" : "diaktifkan"}`, "success")
+      } catch { addToast("Status user belum berubah. Coba lagi.", "error") }
+      finally { setStatusTarget(null) }
     })
   }
 
-  const handleToggleAktif = (userItem: UserProfile) => {
-    setPendingAction(prev => new Set(prev).add(userItem.id))
+  function removeUser() {
+    if (!deleteTarget || deleteConfirmation !== deleteTarget.username) return
+    const target = deleteTarget
     startTransition(async () => {
-      const result = await toggleAktifUser(userItem.id, !userItem.aktif)
-      if (result.error) {
-        showToast(result.error, "error")
-      } else {
-        showToast(
-          `${userItem.username} ${!userItem.aktif ? "diaktifkan" : "dinonaktifkan"}`,
-          "success"
-        )
-      }
-      setPendingAction(prev => {
-        const next = new Set(prev)
-        next.delete(userItem.id)
-        return next
-      })
+      try {
+        const result = await deleteUser(target.id)
+        if (result.error) addToast(result.error, "error")
+        else addToast(`Akun ${target.username} dihapus`, "success")
+      } catch { addToast("Akun belum terhapus. Coba lagi.", "error") }
+      finally { setDeleteTarget(null); setDeleteConfirmation("") }
     })
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-end">
-        <Button onClick={() => setShowAddModal(true)}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-          Tambah User
-        </Button>
-      </div>
-
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="divide-y divide-slate-100">
-          {data.map((userItem) => {
-            const isSelf = userItem.id === currentUserId
-            const isPendingThis = pendingAction.has(userItem.id)
-
-            return (
-              <div
-                key={userItem.id}
-                className={`flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 transition-colors ${
-                  !userItem.aktif ? "bg-slate-50/50" : "hover:bg-slate-50/40"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center font-bold text-sm shrink-0">
-                    {(userItem.nama_lengkap || userItem.username)[0].toUpperCase()}
-                  </div>
-
-                  <div className="flex-1 min-w-0 sm:hidden">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm text-slate-900">
-                        {userItem.username}
-                      </span>
-                      {isSelf && (
-                        <span className="text-xs text-slate-400">(Anda)</span>
-                      )}
-                      <RoleBadge role={userItem.role} />
-                      <StatusBadge aktif={userItem.aktif} />
-                    </div>
-                    {userItem.nama_lengkap && (
-                      <p className="text-xs text-slate-500 mt-0.5">{userItem.nama_lengkap}</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 min-w-0 hidden sm:block">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-slate-900">
-                      {userItem.username}
-                    </span>
-                    {isSelf && (
-                      <span className="text-xs text-slate-400">(Anda)</span>
-                    )}
-                    <RoleBadge role={userItem.role} />
-                    <StatusBadge aktif={userItem.aktif} />
-                  </div>
-                  {userItem.nama_lengkap && (
-                    <p className="text-xs text-slate-500 mt-0.5">{userItem.nama_lengkap}</p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap sm:shrink-0">
-                  <select
-                    value={userItem.role}
-                    onChange={(e) => handleRoleChange(userItem, e.target.value)}
-                    disabled={isPendingThis || (isSelf && userItem.role === "admin")}
-                    className="h-9 px-3 text-sm rounded-lg border border-slate-200 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="kasir">Kasir</option>
-                    <option value="admin">Admin</option>
-                  </select>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditTarget(userItem)}
-                  >
-                    Edit
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setResetPasswordFor(userItem)}
-                  >
-                    Reset Password
-                  </Button>
-
-                  <Button
-                    variant={userItem.aktif ? "outline" : "default"}
-                    size="sm"
-                    disabled={isPendingThis || isSelf}
-                    onClick={() => handleToggleAktif(userItem)}
-                    className={userItem.aktif ? "text-red-600 hover:bg-red-50 hover:border-red-200" : ""}
-                  >
-                    {userItem.aktif ? "Nonaktifkan" : "Aktifkan"}
-                  </Button>
-
-                  <button
-                    onClick={() => setDeleteTarget(userItem)}
-                    disabled={isSelf}
-                    className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                    title={isSelf ? "Tidak bisa menghapus akun sendiri" : "Hapus akun"}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-
-          {data.length === 0 && (
-            <div className="px-6 py-8 text-center text-slate-400 text-sm">
-              Belum ada user
-            </div>
-          )}
-        </div>
-      </div>
-
-      {showAddModal && (
-        <AddUserForm
-          onClose={() => setShowAddModal(false)}
-          onResult={showToast}
-        />
-      )}
-
-      {resetPasswordFor && (
-        <ResetPasswordForm
-          user={resetPasswordFor}
-          onClose={() => setResetPasswordFor(null)}
-          onResult={showToast}
-        />
-      )}
-
-      {editTarget && (
-        <EditUserForm
-          user={editTarget}
-          onClose={() => setEditTarget(null)}
-          onResult={showToast}
-        />
-      )}
-
-      {deleteTarget && (
-        <ConfirmDeleteUserForm
-          user={deleteTarget}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={handleDeleteConfirm}
-          isPending={isDeletingPending}
-        />
-      )}
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+  return <div className="space-y-4">
+    {loadError && <ErrorNotice message={loadError} />}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <label className="relative block flex-1 sm:max-w-sm"><span className="sr-only">Cari user</span><Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-10" placeholder="Cari nama atau username" /></label>
+      <Button onClick={() => setEditor("new")}><Plus size={18} /> Tambah user</Button>
     </div>
-  )
+
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {filtered.map((user) => {
+        const self = user.id === currentUserId
+        return <article key={user.id} className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${user.aktif ? "" : "opacity-70"}`}>
+          <div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-sm font-bold text-yellow-800">{(user.nama_lengkap || user.username).slice(0,1).toUpperCase()}</span><div className="min-w-0 flex-1"><h2 className="truncate font-bold text-slate-900">{user.nama_lengkap || user.username}</h2><p className="truncate text-sm text-slate-500">@{user.username}{self ? " · akun Anda" : ""}</p><div className="mt-2 flex flex-wrap gap-1.5"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.role === "admin" ? "bg-yellow-50 text-yellow-800" : "bg-slate-100 text-slate-600"}`}>{user.role === "admin" ? "Admin" : "Kasir"}</span><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${user.aktif ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{user.aktif ? "Aktif" : "Nonaktif"}</span></div></div>{user.role === "admin" ? <ShieldCheck size={20} className="shrink-0 text-yellow-700" /> : <UserRound size={20} className="shrink-0 text-slate-400" />}</div>
+          <div className="mt-4 grid grid-cols-2 gap-2"><Button variant="outline" size="sm" onClick={() => setEditor(user)}><Pencil size={16} /> Edit</Button><Button variant="outline" size="sm" onClick={() => setResetTarget(user)} disabled={self}><KeyRound size={16} /> Password</Button><Button variant="outline" size="sm" onClick={() => setStatusTarget(user)} disabled={self} className={user.aktif ? "text-red-700" : "text-emerald-700"}><Power size={16} /> {user.aktif ? "Nonaktif" : "Aktifkan"}</Button><Button variant="ghost" size="sm" onClick={() => { setDeleteTarget(user); setDeleteConfirmation("") }} disabled={self} className="text-red-700"><Trash2 size={16} /> Hapus</Button></div>
+          {self && <p className="mt-3 text-xs text-slate-500">Ubah password akun Anda melalui menu Pengaturan.</p>}
+        </article>
+      })}
+    </div>
+    {!loadError && filtered.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center text-sm text-slate-500">{query ? "User tidak ditemukan." : "Belum ada user."}</div>}
+
+    {editor && <UserForm user={editor === "new" ? undefined : editor} currentUserId={currentUserId} onClose={() => setEditor(null)} onSaved={saved} />}
+    {resetTarget && <ResetPasswordModal user={resetTarget} onClose={() => setResetTarget(null)} onSaved={saved} />}
+    {statusTarget && <Modal title={statusTarget.aktif ? "Nonaktifkan akun?" : "Aktifkan akun?"} onClose={() => setStatusTarget(null)} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => setStatusTarget(null)} disabled={pending}>Batal</Button><Button variant={statusTarget.aktif ? "destructive" : "default"} onClick={applyStatus} isLoading={pending}>{statusTarget.aktif ? "Nonaktifkan" : "Aktifkan"}</Button></div>}><p className="text-sm leading-6 text-slate-600">{statusTarget.aktif ? `Akun ${statusTarget.username} langsung kehilangan akses dan sesi mobilenya dicabut. Histori transaksi tetap tersimpan.` : `Akun ${statusTarget.username} dapat kembali login.`}</p></Modal>}
+    {deleteTarget && <Modal title="Hapus akun permanen?" onClose={() => { setDeleteTarget(null); setDeleteConfirmation("") }} busy={pending} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={pending}>Batal</Button><Button variant="destructive" onClick={removeUser} disabled={deleteConfirmation !== deleteTarget.username} isLoading={pending}>Hapus akun</Button></div>}><div className="space-y-4"><p className="text-sm leading-6 text-slate-600">Akun hanya dapat dihapus bila belum memiliki transaksi. Untuk akun yang pernah dipakai, gunakan Nonaktifkan.</p><div><label className="field-label" htmlFor="delete-user-confirmation">Ketik <strong>{deleteTarget.username}</strong> untuk mengonfirmasi</label><Input id="delete-user-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoCapitalize="none" autoFocus /></div></div></Modal>}
+  </div>
 }

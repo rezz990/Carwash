@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   useTransactionNotifications,
   type NewTransactionEvent,
@@ -27,8 +27,10 @@ type ToastItem = {
  */
 function playNotificationSound() {
   try {
+    type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
     const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
+      window.AudioContext || (window as AudioWindow).webkitAudioContext;
+    if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
 
     const playBeep = (startTime: number, frequency: number) => {
@@ -64,7 +66,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 20, scale: 0.95 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      className="flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.12)] border backdrop-blur-md bg-yellow-50/95 border-yellow-200 text-slate-800 max-w-sm"
+      className="flex w-full items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50/95 px-4 py-3.5 text-slate-800 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.12)] backdrop-blur-md sm:max-w-sm sm:px-5"
     >
       <div className="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center shrink-0">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-600">
@@ -167,7 +169,7 @@ export function NotificationCenter() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 items-end pointer-events-none">
+    <div className="pointer-events-none fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] flex flex-col items-end gap-2 sm:left-auto sm:right-6 sm:w-96">
       <AnimatePresence mode="popLayout">
         {toasts.map((toast) => (
           <motion.div

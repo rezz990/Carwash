@@ -6,6 +6,8 @@ import { SidebarNav, MobileNav } from "@/components/admin/SidebarNav";
 import { IdleLogout } from "@/components/admin/IdleLogout";
 import { getLoginTimeoutMinutes } from "@/lib/loginTimeout";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
@@ -21,7 +23,7 @@ export default async function AdminLayout({
   const loginTimeoutMinutes = await getLoginTimeoutMinutes();
 
   return (
-    <div className="min-h-screen flex bg-slate-50 text-slate-900 font-sans selection:bg-yellow-200">
+    <div className="h-dvh flex bg-slate-50 text-slate-900 font-sans selection:bg-yellow-200">
       <IdleLogout timeoutMinutes={loginTimeoutMinutes} />
       {/* Sidebar */}
       <aside className="w-72 bg-white border-r border-slate-200 flex-col hidden md:flex z-20 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
@@ -91,13 +93,13 @@ export default async function AdminLayout({
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative min-w-0">
+      <main className="flex-1 flex flex-col h-dvh overflow-hidden relative min-w-0">
         {/* Decorative background blur */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-yellow-400/5 rounded-full blur-3xl pointer-events-none -z-10 transform translate-x-1/3 -translate-y-1/3" />
         <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-yellow-500/5 rounded-full blur-3xl pointer-events-none -z-10 transform -translate-x-1/3 translate-y-1/3" />
 
         {/* Mobile Header */}
-        <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4 flex items-center justify-between z-10 sticky top-0">
+        <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex shrink-0 items-center justify-between z-30">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-yellow-400/20 rounded-lg flex items-center justify-center text-yellow-600">
               <svg
@@ -128,8 +130,8 @@ export default async function AdminLayout({
           </div>
         </header>
 
-        <div className="p-3.5 sm:p-5 md:p-8 lg:p-10 flex-1 overflow-auto min-w-0">
-          <div className="max-w-6xl mx-auto animate-page-enter">{children}</div>
+        <div className="admin-scroll p-4 sm:p-5 md:p-8 lg:p-10 flex-1 overflow-auto min-h-0 min-w-0">
+          <div className="max-w-6xl mx-auto">{children}</div>
         </div>
       </main>
 

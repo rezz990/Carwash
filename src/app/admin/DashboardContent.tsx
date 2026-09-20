@@ -2,21 +2,21 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { motion } from "framer-motion"
-import { OverviewChart } from "./OverviewChart"
-import { FadeIn, StaggerContainer, StaggerItem } from "@/components/animation"
-import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
 import {
-  DollarSign,
-  ShoppingCart,
-  TrendingUp,
-  Users,
   ArrowRight,
-  Receipt,
-  UserCog,
   BarChart3,
+  CarFront,
+  CircleDollarSign,
+  Receipt,
   RefreshCw,
+  TrendingUp,
+  UserCog,
+  Users,
 } from "lucide-react"
+import { OverviewChart } from "./OverviewChart"
+import { ErrorNotice } from "@/components/ui/Feedback"
+import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
+import type { OverviewStats } from "./actions"
 
 function formatRupiah(value: number) {
   return new Intl.NumberFormat("id-ID", {
@@ -35,273 +35,110 @@ function formatWaktu(iso: string) {
   })
 }
 
-/* ─── Types ───────────────────────────────────────────────────────────────── */
-interface Transaksi {
-  id: string | number
-  kategori: string
-  ukuran: string
-  plat_nomor: string | null
-  tanggal_waktu: string
-  tarif_total: number
-}
-
-interface Stats {
-  error?: string
-  pendapatanHariIni: number
-  transaksiHariIni: number
-  rataRataPendapatan7Hari: number
-  jumlahKasirAktif: number
-  persenPerubahan: number | null
-  kategoriTerlarisMingguIni: string | null
-  transaksiTerbaru: Transaksi[]
-}
-
-/* ─── Stat Card ───────────────────────────────────────────────────────────── */
-function StatCard({
-  label,
-  value,
-  sub,
-  accent,
-  icon: Icon,
-  delay,
-}: {
+function Metric({ label, value, icon: Icon, tone = "slate", note }: {
   label: string
   value: string
-  sub?: string
-  accent?: "indigo" | "emerald" | "amber" | "slate"
   icon: React.ElementType
-  delay: number
+  tone?: "slate" | "green" | "amber"
+  note?: string
 }) {
-  const colorMap = {
-    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
-    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
-    amber: "bg-amber-50 text-amber-600 border-amber-100",
-    slate: "bg-slate-50 text-slate-600 border-slate-100",
-  }
-
-  const textColorMap = {
-    indigo: "text-indigo-600",
-    emerald: "text-emerald-600",
-    amber: "text-amber-600",
-    slate: "text-slate-900",
-  }
+  const color = tone === "green"
+    ? "bg-emerald-50 text-emerald-700"
+    : tone === "amber"
+      ? "bg-amber-50 text-amber-700"
+      : "bg-slate-100 text-slate-600"
 
   return (
-    <FadeIn delay={delay}>
-      <motion.div
-        whileHover={{ y: -4, boxShadow: "0 12px 24px -8px rgba(0,0,0,0.1)" }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        className="bg-white rounded-xl border border-slate-200/80 shadow-sm p-4 sm:p-5 cursor-default"
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-slate-500 font-medium">{label}</p>
-            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${textColorMap[accent || "slate"]}`}>
-              {value}
-            </p>
-            {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
-          </div>
-          <div className={`p-2.5 rounded-xl border ${colorMap[accent || "slate"]}`}>
-            <Icon className="w-5 h-5" />
-          </div>
-        </div>
-      </motion.div>
-    </FadeIn>
-  )
-}
-
-/* ─── Nav Card ────────────────────────────────────────────────────────────── */
-function NavCard({
-  href,
-  title,
-  desc,
-  icon: Icon,
-}: {
-  href: string
-  title: string
-  desc: string
-  icon: React.ElementType
-}) {
-  return (
-    <StaggerItem>
-      <Link href={href} className="group block h-full">
-        <motion.div
-          whileHover={{ y: -6, boxShadow: "0 20px 40px -12px rgba(99, 102, 241, 0.15)" }}
-          transition={{ type: "spring", stiffness: 400, damping: 25 }}
-          className="bg-white/60 backdrop-blur-sm p-6 rounded-2xl border border-slate-200/60 shadow-sm hover:border-yellow-300 hover:bg-white transition-all duration-300 h-full flex flex-col relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transform group-hover:scale-110 transition-all duration-500 text-yellow-500">
-            <Icon className="w-20 h-20" />
-          </div>
-
-          <motion.div
-            className="w-12 h-12 bg-yellow-50 text-yellow-600 rounded-xl flex items-center justify-center mb-4 group-hover:bg-yellow-400 group-hover:text-slate-900 transition-colors duration-300"
-            whileHover={{ rotate: 5 }}
-          >
-            <Icon className="w-6 h-6" />
-          </motion.div>
-
-          <h3 className="text-xl font-bold text-slate-900 mb-2">{title}</h3>
-          <p className="text-slate-500 flex-1 leading-relaxed">{desc}</p>
-
-          <div className="mt-6 flex items-center text-yellow-600 text-sm font-semibold">
-            <span>Buka menu</span>
-            <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
-          </div>
-        </motion.div>
-      </Link>
-    </StaggerItem>
-  )
-}
-
-/* ─── Main Content ────────────────────────────────────────────────────────── */
-export function DashboardContent({ stats }: { stats: Stats }) {
-    const router = useRouter()
-  const perubahanLabel =
-    stats.persenPerubahan === null
-      ? null
-      : `${stats.persenPerubahan >= 0 ? "+" : ""}${stats.persenPerubahan.toFixed(0)}% vs kemarin`
-  const {pendingRefresh} = useRealtimeRekap(() => {
-    router.refresh();
-  }, { debounceMs: 3000})
-  return (
-    <div className="space-y-5 sm:space-y-8 min-w-0">
-      <FadeIn>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          {pendingRefresh && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-50 text-yellow-600 text-xs font-medium border border-yellow-200 animate-pulse">
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              Memperbarui...
-            </span>
-          )}
-        </div>
-      </FadeIn>
-
-      {stats.error && (
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="p-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl"
-        >
-          {stats.error}
-        </motion.div>
-      )}
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Pendapatan Hari Ini"
-          value={formatRupiah(stats.pendapatanHariIni)}
-          sub={perubahanLabel || undefined}
-          accent="indigo"
-          icon={DollarSign}
-          delay={0.1}
-        />
-        <StatCard
-          label="Transaksi Hari Ini"
-          value={stats.transaksiHariIni.toString()}
-          accent="slate"
-          icon={ShoppingCart}
-          delay={0.2}
-        />
-        <StatCard
-          label="Rata-rata / Hari (7 hari)"
-          value={formatRupiah(Math.round(stats.rataRataPendapatan7Hari))}
-          accent="emerald"
-          icon={TrendingUp}
-          delay={0.3}
-        />
-        <StatCard
-          label="Kasir Aktif"
-          value={stats.jumlahKasirAktif.toString()}
-          sub={
-            stats.kategoriTerlarisMingguIni
-              ? `Terlaris minggu ini: ${stats.kategoriTerlarisMingguIni}`
-              : undefined
-          }
-          accent="amber"
-          icon={Users}
-          delay={0.4}
-        />
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium leading-5 text-slate-500 sm:text-sm">{label}</p>
+        <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${color}`}><Icon size={18} /></span>
       </div>
+      <p className="mt-2 break-words text-xl font-bold tracking-tight text-slate-950 tabular-nums sm:text-2xl">{value}</p>
+      {note && <p className="mt-1 text-xs leading-5 text-slate-500">{note}</p>}
+    </article>
+  )
+}
 
-      {/* Chart */}
-      <FadeIn delay={0.5}>
-        <OverviewChart />
-      </FadeIn>
+const quickLinks = [
+  { href: "/admin/rekap", label: "Buka rekap", icon: BarChart3 },
+  { href: "/admin/tarif", label: "Atur tarif", icon: Receipt },
+  { href: "/admin/users", label: "Kelola user", icon: UserCog },
+]
 
-      {/* Transaksi Terbaru */}
-      <FadeIn delay={0.6}>
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-700">Transaksi Terbaru</h3>
-            <Link
-              href="/admin/rekap"
-              className="text-xs font-semibold text-yellow-600 hover:text-yellow-700 flex items-center gap-1 group"
-            >
-              Lihat semua
-              <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-1" />
-            </Link>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {stats.transaksiTerbaru.map((t, i) => (
-              <motion.div
-                key={t.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.7 + i * 0.05 }}
-                whileHover={{ backgroundColor: "rgba(234, 179, 8, 0.05)" }}
-                className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-yellow-50 text-yellow-600 flex items-center justify-center text-xs font-bold shrink-0">
-                    {t.kategori === "Motor" ? "M" : "🚗"}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">
-                      {t.kategori} {t.ukuran}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {t.plat_nomor === "B0000XX"
-                      ? "TANPA PLAT"
-                      : t.plat_nomor || "-"} · {formatWaktu(t.tanggal_waktu)}
-                    </p>
-                  </div>
-                </div>
-                <p className="text-sm font-semibold text-slate-900 tabular-nums">
-                  {formatRupiah(t.tarif_total)}
-                </p>
-              </motion.div>
-            ))}
-            {stats.transaksiTerbaru.length === 0 && (
-              <div className="px-5 py-8 text-center text-slate-400 text-sm">Belum ada transaksi</div>
-            )}
-          </div>
+export function DashboardContent({ stats }: { stats: OverviewStats }) {
+  const router = useRouter()
+  const { pendingRefresh } = useRealtimeRekap(() => router.refresh(), { debounceMs: 1_500 })
+  const perubahan = stats.persenPerubahan === null
+    ? "Belum ada pembanding kemarin"
+    : `${stats.persenPerubahan >= 0 ? "+" : ""}${stats.persenPerubahan.toFixed(0)}% dari kemarin`
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-5 sm:space-y-7">
+      <header className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-500">Ringkasan operasional</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Hari ini</h1>
         </div>
-      </FadeIn>
+        {pendingRefresh && (
+          <span role="status" className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            <RefreshCw size={14} className="animate-spin" /> Memperbarui
+          </span>
+        )}
+      </header>
 
-      {/* Kartu Navigasi */}
-      <StaggerContainer className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <NavCard
-          href="/admin/tarif"
-          title="Kelola Tarif"
-          desc="Atur harga untuk setiap jenis kendaraan dan sesuaikan jatah karyawan/pemilik dengan mudah."
-          icon={Receipt}
-        />
-        <NavCard
-          href="/admin/users"
-          title="Kelola User"
-          desc="Kelola akses akun sistem, tambah kasir baru, atau atur peran administratif untuk tim Anda."
-          icon={UserCog}
-        />
-        <NavCard
-          href="/admin/rekap"
-          title="Rekap Laporan"
-          desc="Lihat detail pendapatan, pantau histori transaksi, dan export laporan data secara menyeluruh."
-          icon={BarChart3}
-        />
-      </StaggerContainer>
+      {stats.error && <ErrorNotice message={stats.error} />}
+
+      <section aria-label="Statistik hari ini" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <article className="col-span-2 overflow-hidden rounded-2xl bg-slate-950 p-5 text-white shadow-sm lg:col-span-2 lg:row-span-2 lg:flex lg:flex-col lg:justify-between lg:p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-300">Pendapatan kotor hari ini</p>
+              <p className="mt-2 text-3xl font-bold tracking-tight tabular-nums sm:text-4xl">{formatRupiah(stats.pendapatanHariIni)}</p>
+            </div>
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-yellow-400 text-slate-950"><CircleDollarSign size={23} /></span>
+          </div>
+          <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-white/10 pt-4">
+            <div><p className="text-xs text-slate-400">Bagian pemilik</p><p className="mt-1 text-lg font-semibold tabular-nums">{formatRupiah(stats.bagianPemilikHariIni)}</p></div>
+            <p className="text-xs font-medium text-slate-300">{perubahan}</p>
+          </div>
+        </article>
+
+        <Metric label="Transaksi" value={String(stats.transaksiHariIni)} icon={CarFront} />
+        <Metric label="Kasir aktif" value={String(stats.jumlahKasirAktif)} icon={Users} tone="amber" note={stats.kategoriTerlarisMingguIni ? `Terlaris: ${stats.kategoriTerlarisMingguIni}` : undefined} />
+        <div className="col-span-2 lg:col-span-2">
+          <Metric label="Rata-rata pendapatan kotor per hari (7 hari)" value={formatRupiah(Math.round(stats.rataRataPendapatan7Hari))} icon={TrendingUp} tone="green" />
+        </div>
+      </section>
+
+      <nav aria-label="Aksi cepat" className="grid grid-cols-3 gap-2 sm:gap-3">
+        {quickLinks.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-yellow-300 hover:bg-yellow-50 sm:flex-row sm:text-sm">
+            <Icon size={19} className="text-yellow-700" /> {label}
+          </Link>
+        ))}
+      </nav>
+
+      <OverviewChart />
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+          <div><h2 className="font-bold text-slate-900">Transaksi terbaru</h2><p className="mt-0.5 text-xs text-slate-500">Aktivitas terakhir dari semua kasir</p></div>
+          <Link href="/admin/rekap" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-yellow-700">Semua <ArrowRight size={16} /></Link>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {stats.transaksiTerbaru.map((transaction) => (
+            <div key={transaction.id} className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-yellow-50 text-yellow-700"><CarFront size={19} /></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{transaction.kategori} {transaction.ukuran}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{transaction.plat_nomor === "B0000XX" ? "Tanpa plat" : transaction.plat_nomor || "Tanpa plat"} · {formatWaktu(transaction.tanggal_waktu)} WIB</span></span>
+              </span>
+              <strong className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{formatRupiah(transaction.tarif_total)}</strong>
+            </div>
+          ))}
+          {stats.transaksiTerbaru.length === 0 && <div className="px-5 py-10 text-center text-sm text-slate-500">Belum ada transaksi hari ini.</div>}
+        </div>
+      </section>
     </div>
   )
 }

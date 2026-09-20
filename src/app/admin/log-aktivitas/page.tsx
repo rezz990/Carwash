@@ -9,13 +9,12 @@ export default async function LogAktivitasPage() {
   const userOptions = await fetchActivityLogUserOptions()
 
   return (
-    <div className="space-y-5 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out min-w-0">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Log Aktivitas</h1>
-        <p className="text-slate-500 mt-1.5 sm:mt-2 text-sm sm:text-base">
-          Riwayat semua aksi penting dalam waktu WIB. Setiap halaman menampilkan 50 log dan log lama dibersihkan otomatis.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-5 sm:space-y-7">
+      <header>
+        <p className="text-sm font-medium text-slate-500">Audit sistem</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Log aktivitas</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Riwayat aksi penting dalam WIB. Detail perubahan dan perangkat dapat diperiksa per aktivitas.</p>
+      </header>
 
       <ActivityLogTable userOptions={userOptions} />
     </div>

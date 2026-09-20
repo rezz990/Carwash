@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build --webpack && node scripts/prepare-standalone.mjs",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "check": "npm run lint && npm run typecheck && npm test",
     "migrate-data": "tsx scripts/migrate-data.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
@@ -23,13 +26,14 @@
     "jspdf-autotable": "^5.0.8",
     "lucide-react": "^1.31.0",
     "mysql2": "^3.23.3",
-    "next": "16.3.0",
+    "next": "^16.3.5",
     "next-auth": "^4.24.15",
     "pg": "^8.16.3",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "^3.10.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "tsx": "^4.20.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
@@ -39,9 +43,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "^16.3.5",
     "tailwindcss": "^4",
-    "tsx": "^4.20.3",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "nanoid": "3.3.18",
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
   }
 }

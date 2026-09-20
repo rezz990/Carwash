@@ -1,43 +1,51 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bujon Carwash
 
-## Activity log retention
+Dashboard operasional carwash berbasis Next.js 16, MySQL/MariaDB, dan NextAuth. Antarmuka admin dioptimalkan untuk penggunaan harian melalui ponsel, sementara API mobile melayani aplikasi kasir.
 
-Timestamp log aktivitas disimpan sebagai UTC dan ditampilkan dalam timezone bisnis
-`Asia/Jakarta` (WIB). Log yang lebih lama dari 90 hari dibersihkan otomatis saat
-aktivitas baru dicatat. Durasi retensi dapat diubah dengan environment variable
-`ACTIVITY_LOG_RETENTION_DAYS` (bilangan bulat antara 1 dan 3650).
+## Fitur utama
 
-## Getting Started
+- Overview pendapatan, transaksi, kasir aktif, dan grafik periode.
+- Rekap harian dan detail transaksi dengan filter, pencarian, koreksi, serta ekspor Excel/PDF.
+- Pengelolaan tarif, pembagian karyawan/pemilik, user, dan hak akses.
+- Logout otomatis berbasis aktivitas yang tetap berlaku setelah tab ditutup atau browser berada di latar belakang.
+- Log aktivitas, notifikasi transaksi lewat SSE, dan salinan transaksi JSON.
+- API mobile dengan access/refresh token.
 
-First, run the development server:
+## Menjalankan secara lokal
+
+Persyaratan: Node.js 20+, MySQL 8+ atau MariaDB 10.4+.
 
 ```bash
+cp .env.example .env.local
+npm install
+npm run db:migrate
+npm run db:create-admin -- admin "password-kuat" "Administrator"
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka `http://localhost:3000`. Semua `DATETIME` di database disimpan sebagai UTC dan ditampilkan sebagai WIB (`Asia/Jakarta`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Pemeriksaan sebelum merge
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run check
+npm run build
+```
 
-## Learn More
+`npm run check` menjalankan ESLint, TypeScript, dan tes perilaku. GitHub Actions menjalankan pemeriksaan yang sama pada push ke `main`/`develop` dan setiap pull request.
 
-To learn more about Next.js, take a look at the following resources:
+## Database
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Migrasi di `migrations/` adalah sumber kebenaran skema dan dijalankan berurutan oleh:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run db:migrate
+```
 
-## Deploy on Vercel
+Jangan mengubah tabel production secara manual tanpa migrasi. Panduan migrasi lama dari Supabase tersedia di [MYSQL_MIGRATION.md](./MYSQL_MIGRATION.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Gunakan database, secret, dan domain terpisah untuk staging. Panduan cPanel dan `dev.bujon.my.id` tersedia di [DEPLOYMENT.md](./DEPLOYMENT.md).
+
+Log aktivitas disimpan selama 90 hari secara default. Atur `ACTIVITY_LOG_RETENTION_DAYS` bila masa retensi perlu diubah.

@@ -2,9 +2,8 @@ import type { RowDataPacket } from "mysql2"
 import pool from "@/lib/db"
 import type { ResultSetHeader } from "mysql2"
 
-export const DEFAULT_LOGIN_TIMEOUT_MINUTES = 60
-export const MIN_LOGIN_TIMEOUT_MINUTES = 5
-export const MAX_LOGIN_TIMEOUT_MINUTES = 7 * 24 * 60
+import { DEFAULT_LOGIN_TIMEOUT_MINUTES, MIN_LOGIN_TIMEOUT_MINUTES, MAX_LOGIN_TIMEOUT_MINUTES } from "./sessionPolicy"
+export { DEFAULT_LOGIN_TIMEOUT_MINUTES, MIN_LOGIN_TIMEOUT_MINUTES, MAX_LOGIN_TIMEOUT_MINUTES } from "./sessionPolicy"
 
 const CACHE_TTL_MS = 30_000
 const globalTimeoutCache = globalThis as typeof globalThis & {
