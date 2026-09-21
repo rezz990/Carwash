@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   hasClientTransactionId,
   isDuplicateKeyError,
+  isNoPlatePlaceholder,
   parseClientTransactionId,
 } from "../src/lib/mobile/idempotency";
 
@@ -27,4 +28,9 @@ test("invalid supplied client transaction ID is rejected", () => {
 test("duplicate key errors are recognized safely", () => {
   assert.equal(isDuplicateKeyError({ code: "ER_DUP_ENTRY" }), true);
   assert.equal(isDuplicateKeyError(new Error("other")), false);
+});
+
+test("no-plate placeholder bypasses real plate duplicate checks", () => {
+  assert.equal(isNoPlatePlaceholder("B0000XX"), true);
+  assert.equal(isNoPlatePlaceholder("B1234XYZ"), false);
 });
