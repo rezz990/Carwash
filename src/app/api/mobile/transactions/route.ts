@@ -30,6 +30,7 @@ import { logActivity } from "@/lib/activityLog";
 import {
   hasClientTransactionId,
   isDuplicateKeyError,
+  isNoPlatePlaceholder,
   parseClientTransactionId,
 } from "@/lib/mobile/idempotency";
 
@@ -254,8 +255,13 @@ export async function POST(request: Request) {
        Cek duplikat plat 10 menit
        =============================== */
 
-    const [duplicateRows] =
-      await connection.query<RowDataPacket[]>(
+    let duplicateRows: RowDataPacket[] = [];
+
+    // B 0000 XX adalah placeholder kompatibilitas untuk transaksi tanpa plat.
+    // Placeholder tersebut boleh dipakai berkali-kali dan tidak boleh masuk
+    // validasi duplikat plat kendaraan sungguhan.
+    if (!isNoPlatePlaceholder(plate)) {
+      const [rows] = await connection.query<RowDataPacket[]>(
         `SELECT id
          FROM transaksi
          WHERE REPLACE(
@@ -271,6 +277,9 @@ export async function POST(request: Request) {
          LIMIT 1`,
         [plate],
       );
+
+      duplicateRows = rows;
+    }
 
     if (duplicateRows.length) {
       await connection.rollback();
