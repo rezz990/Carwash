@@ -764,9 +764,12 @@ export async function GET(request: Request) {
         "jenisKendaraanId",
       );
 
-    const where: string[] = [];
+    // Riwayat mobile wajib terisolasi ke akun kasir yang sedang login.
+    // Selain mencegah data antar-kasir tercampur, filter dasar ini menjaga
+    // WHERE tetap valid ketika aplikasi tidak mengirim filter tambahan.
+    const where: string[] = ["t.kasir_id = ?"];
 
-    const params: unknown[] = [];
+    const params: unknown[] = [auth.user.id];
 
     /* ===============================
        Filter tanggal mulai
