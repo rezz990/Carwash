@@ -5,10 +5,6 @@ import { requireAdmin } from "@/lib/authz"
 import type { RowDataPacket } from "mysql2"
 import { addJakartaDays, jakartaDateToUtcSql, todayJakarta, utcSqlToIso } from "@/lib/datetime"
 
-function getTodayJakarta(): string {
-  return todayJakarta()
-}
-
 export type OverviewStats = {
   pendapatanHariIni: number
   bagianPemilikHariIni: number
@@ -32,7 +28,7 @@ export type OverviewStats = {
 export async function fetchOverviewStats(): Promise<OverviewStats> {
   const { error: authError } = await requireAdmin()
   if (authError) return { pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0, persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0, kategoriTerlarisMingguIni: null, transaksiTerbaru: [], error: authError }
-  const todayStr = getTodayJakarta()
+  const todayStr = todayJakarta()
 
   const yesterdayStr = addJakartaDays(todayStr, -1)
   const sevenDaysAgoStr = addJakartaDays(todayStr, -6)

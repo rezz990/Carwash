@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useEffectEvent, useState } from "react";
+import type { NewTransactionEvent } from "@/types/notifications";
 
-export type NewTransactionEvent = {
-  id: string;
-  tanggalWaktu: string;
-  platNomor: string | null;
-  tarif: number;
-  jatahKaryawan: number;
-  jatahPemilik: number;
-  jenisKendaraan: { id: string; kategori: string; ukuran: string };
-  kasir: { username: string; namaLengkap: string | null };
-};
+export type { NewTransactionEvent };
 
 /**
  * Subscribe ke SSE stream transaksi baru. Otomatis reconnect kalau koneksi

@@ -44,3 +44,10 @@ const pool = new Proxy({} as mysql.Pool, {
 })
 
 export default pool
+
+/** Extract the MySQL error code (e.g. "ER_DUP_ENTRY") from an unknown thrown value. */
+export function mysqlCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : undefined
+}

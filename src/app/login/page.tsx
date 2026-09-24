@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { Dancing_Script } from "next/font/google"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
-import { LoginForm } from "./LoginForm"
+import { LoginForm } from "@/features/auth/LoginForm"
 
 const dancingScript = Dancing_Script({ subsets: ["latin"], weight: ["700"] })
 

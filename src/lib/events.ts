@@ -1,4 +1,7 @@
-    import { EventEmitter } from "node:events";
+import { EventEmitter } from "node:events";
+import type { NewTransactionEvent } from "@/types/notifications";
+
+export type { NewTransactionEvent } from "@/types/notifications";
 
 /**
  * Singleton event emitter untuk broadcast transaksi baru ke semua koneksi
@@ -24,17 +27,6 @@ export const eventBus: EventEmitter =
 eventBus.setMaxListeners(50);
 
 export const EVENT_NEW_TRANSACTION = "new-transaction";
-
-export type NewTransactionEvent = {
-  id: string;
-  tanggalWaktu: string;
-  platNomor: string | null;
-  tarif: number;
-  jatahKaryawan: number;
-  jatahPemilik: number;
-  jenisKendaraan: { id: string; kategori: string; ukuran: string };
-  kasir: { username: string; namaLengkap: string | null };
-};
 
 export function emitNewTransaction(data: NewTransactionEvent) {
   eventBus.emit(EVENT_NEW_TRANSACTION, data);

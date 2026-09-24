@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { cn } from "@/utils/cn"
+import { cn } from "@/lib/cn"
 import { motion } from "framer-motion"
 import { Modal } from "@/components/ui/Modal"
 import { EllipsisVertical } from "lucide-react"

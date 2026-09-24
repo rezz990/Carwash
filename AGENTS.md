@@ -75,8 +75,16 @@ dengan menyembunyikan tombol di UI.
 - UI login menggunakan **username + password** (tanpa email) — tampilan login **tidak diubah**.
 - Di balik layar, gunakan **NextAuth.js** dengan `CredentialsProvider`.
 - Session disimpan di cookie (JWT).
-- Admin-only route/action wajib memastikan user yang login memiliki role `admin` melalui **middleware** (`src/middleware.ts`) dan pengecekan di setiap API route.
+- Admin-only route/action wajib memastikan user yang login memiliki role `admin` melalui **proxy/middleware** (`src/proxy.ts`) dan pengecekan di setiap API route.
 - Jangan mengandalkan proteksi UI saja.
+
+## Struktur Kode
+- `src/app/` — routing Next.js saja: halaman, layout, dan API route.
+- `src/features/` — fitur admin (dashboard, rekap, tarif, users, settings, activity-log, auth) berisi UI + server actions.
+- `src/components/` — komponen bersama (shell admin, UI, toast, animasi).
+- `src/lib/` — infrastruktur: database, auth, datetime/WIB, format tampilan, mobile API, log aktivitas.
+- `src/hooks/` dan `src/types/` — hook client dan tipe bersama.
+- `migrations/` — skema MySQL yang berlaku. Folder `supabase/` hanya sisa migrasi lama, bukan sumber kebenaran.
 
 ## Database Schema & Migrations (MySQL/MariaDB)
 - Source of truth schema database ada di `migrations/` (format MySQL).

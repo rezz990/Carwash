@@ -6,16 +6,8 @@ import {
   type NewTransactionEvent,
 } from "@/hooks/useTransactionNotifications";
 import { useBrowserNotification } from "@/hooks/useBrowserNotification";
+import { formatRupiah } from "@/lib/formatters";
 import { motion, AnimatePresence } from "framer-motion";
-
-function formatRupiah(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 type ToastItem = {
   id: string;

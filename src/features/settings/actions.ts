@@ -3,22 +3,12 @@
 import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
 import type { ResultSetHeader, RowDataPacket } from "mysql2"
-import pool from "@/lib/db"
-import { requireAdmin, type CurrentUser } from "@/lib/authz"
+import pool, { mysqlCode } from "@/lib/db"
+import { requireAdmin } from "@/lib/authz"
 import { utcSqlToIso } from "@/lib/datetime"
-import { logActivity, type ActivityActor } from "@/lib/activityLog"
+import { logActivity, toActivityActor } from "@/lib/activityLog"
 import { MAX_LOGIN_TIMEOUT_MINUTES, MIN_LOGIN_TIMEOUT_MINUTES, setLoginTimeoutMinutes } from "@/lib/loginTimeout"
 import { MAX_BACKUP_ROWS, insertBackupRows, validateTransactionBackup, type BackupRow } from "@/lib/transactionBackup"
-
-function toActor(user: CurrentUser): ActivityActor {
-  return { id: user.id, username: user.username, role: user.role }
-}
-
-function mysqlCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code?: unknown }).code)
-    : undefined
-}
 
 export async function updateLoginTimeout(minutes: number) {
   const { error, user } = await requireAdmin()
@@ -30,7 +20,7 @@ export async function updateLoginTimeout(minutes: number) {
     console.error("Update login timeout error:", cause)
     return { error: "Timeout login belum tersimpan" }
   }
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "pengaturan", description: `Mengubah timeout login menjadi ${minutes} menit`, newValue: { login_timeout_minutes: minutes } })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "pengaturan", description: `Mengubah timeout login menjadi ${minutes} menit`, newValue: { login_timeout_minutes: minutes } })
   revalidatePath("/admin", "layout")
   return { success: true }
 }
@@ -65,7 +55,7 @@ export async function updateOwnAccount(params: { namaLengkap: string; username: 
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: user.id, description: "Memperbarui profil akun sendiri", oldValue: previous ? { username: previous.username, nama_lengkap: previous.nama_lengkap } : undefined, newValue: { username, nama_lengkap: name || null } })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "user", entityId: user.id, description: "Memperbarui profil akun sendiri", oldValue: previous ? { username: previous.username, nama_lengkap: previous.nama_lengkap } : undefined, newValue: { username, nama_lengkap: name || null } })
   revalidatePath("/admin", "layout")
   revalidatePath("/admin/pengaturan")
   return { success: true }
@@ -102,7 +92,7 @@ export async function changeOwnPassword(params: { currentPassword: string; newPa
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "auth", entityId: user.id, description: "Mengubah password akun sendiri dan mencabut semua sesi aktif" })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "auth", entityId: user.id, description: "Mengubah password akun sendiri dan mencabut semua sesi aktif" })
   return { success: true }
 }
 
@@ -121,7 +111,7 @@ export async function fetchAllTransaksiForBackup(): Promise<{ data: BackupRow[];
       plat_nomor: row.plat_nomor ? String(row.plat_nomor) : null, tarif_total: Number(row.tarif_total),
       tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan), tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik), kasir_id: String(row.kasir_id),
     }))
-    await logActivity({ actor: toActor(user), action: "EXPORT", entityType: "laporan", description: `Mengekspor salinan ${data.length} transaksi`, newValue: { jumlah_baris: data.length } })
+    await logActivity({ actor: toActivityActor(user), action: "EXPORT", entityType: "laporan", description: `Mengekspor salinan ${data.length} transaksi`, newValue: { jumlah_baris: data.length } })
     return { data }
   } catch (cause) {
     console.error("Fetch backup error:", cause)
@@ -139,7 +129,7 @@ export async function restoreTransaksiBackup(params: { rows: unknown }) {
   const connection = await pool.getConnection()
   try {
     const result = await insertBackupRows(connection, rows)
-    await logActivity({ actor: toActor(user), action: "CREATE", entityType: "laporan", description: `Pemulihan transaksi: ${result.inserted} ditambahkan, ${result.skipped} dilewati`, newValue: { mode: "append", inserted: result.inserted, skipped: result.skipped } })
+    await logActivity({ actor: toActivityActor(user), action: "CREATE", entityType: "laporan", description: `Pemulihan transaksi: ${result.inserted} ditambahkan, ${result.skipped} dilewati`, newValue: { mode: "append", inserted: result.inserted, skipped: result.skipped } })
     revalidatePath("/admin", "layout")
     return { success: true, jumlahRestored: result.inserted, jumlahSkipped: result.skipped }
   } catch (cause) {

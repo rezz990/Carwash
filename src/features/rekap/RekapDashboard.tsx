@@ -9,14 +9,15 @@ import { DateRangeFields } from "@/components/ui/DateRangeFields"
 import { EmptyState, ErrorNotice, LoadingState } from "@/components/ui/Feedback"
 import { useToast } from "@/components/toast/ToastProvider"
 import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
-import { formatRupiah, formatTanggalPanjang, startOfMonthWib, startOfWeekWib, todayWib } from "@/lib/formatters"
+import { formatRupiah, formatTanggalPanjang, startOfMonthWib, startOfWeekWib } from "@/lib/formatters"
+import { todayJakarta } from "@/lib/datetime"
 import { fetchRekap, fetchTransactionDateGroups, fetchTransactionsForDate, fetchJenisKendaraanAktif, deleteTransaksi, type RekapResult, type PaginatedTransactionGroups, type PaginatedDailyTransactions, type TransaksiDetail } from "./actions"
 import { SummaryCard } from "./components/SummaryCard"
 import { PaginationControls } from "./components/PaginationControls"
 import { DailyTransactionsModal } from "./components/DailyTransactionsModal"
 import { EditTransaksiModal } from "./components/EditTransaksiModal"
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal"
-import { exportExcel, exportPdf } from "./utils/exportUtils"
+import { exportExcel, exportPdf } from "./exportUtils"
 
 type Result<T> = { key: string; data?: T; error?: string }
 const PAGE_SIZE = 10
@@ -119,7 +120,7 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
     } catch { setFilterError("Laporan gagal dibuat. Periksa koneksi dan coba lagi.") }
     finally { setExporting(null) }
   }
-  const presets = [{ label: "Hari ini", from: todayWib() }, { label: "Minggu ini", from: startOfWeekWib(todayWib()) }, { label: "Bulan ini", from: startOfMonthWib(todayWib()) }]
+  const presets = [{ label: "Hari ini", from: todayJakarta() }, { label: "Minggu ini", from: startOfWeekWib(todayJakarta()) }, { label: "Bulan ini", from: startOfMonthWib(todayJakarta()) }]
   const days = [...(data?.harian ?? [])].reverse()
   const pageDays = days.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const rangeLabel = period.from === period.to ? formatTanggalPanjang(period.from) : `${formatTanggalPanjang(period.from)} – ${formatTanggalPanjang(period.to)}`
@@ -135,8 +136,8 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
         </div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 sm:flex" aria-label="Pilihan periode cepat">
-        {presets.map(preset => <button key={preset.label} type="button" aria-pressed={period.from === preset.from && period.to === todayWib()}
-          onClick={() => apply(preset.from, todayWib())} className="min-h-11 rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-600 aria-pressed:border-yellow-400 aria-pressed:bg-yellow-400 aria-pressed:text-slate-900 sm:px-4 sm:text-sm">{preset.label}</button>)}
+        {presets.map(preset => <button key={preset.label} type="button" aria-pressed={period.from === preset.from && period.to === todayJakarta()}
+          onClick={() => apply(preset.from, todayJakarta())} className="min-h-11 rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-600 aria-pressed:border-yellow-400 aria-pressed:bg-yellow-400 aria-pressed:text-slate-900 sm:px-4 sm:text-sm">{preset.label}</button>)}
       </div>
     </section>
 

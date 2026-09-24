@@ -16,24 +16,8 @@ import {
 import { OverviewChart } from "./OverviewChart"
 import { ErrorNotice } from "@/components/ui/Feedback"
 import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
+import { formatRupiah, formatWaktu } from "@/lib/formatters"
 import type { OverviewStats } from "./actions"
-
-function formatRupiah(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatWaktu(iso: string) {
-  return new Date(iso).toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  })
-}
 
 function Metric({ label, value, icon: Icon, tone = "slate", note }: {
   label: string

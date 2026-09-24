@@ -4,14 +4,43 @@ import { revalidatePath } from "next/cache"
 import bcrypt from "bcryptjs"
 import type { PoolConnection } from "mysql2/promise"
 import type { ResultSetHeader, RowDataPacket } from "mysql2"
-import pool from "@/lib/db"
-import { requireAdmin, type CurrentUser } from "@/lib/authz"
-import { logActivity, type ActivityActor } from "@/lib/activityLog"
+import pool, { mysqlCode } from "@/lib/db"
+import { requireAdmin } from "@/lib/authz"
+import { logActivity, toActivityActor } from "@/lib/activityLog"
+import { isUuid } from "@/lib/ids"
+import { utcSqlToIso } from "@/lib/datetime"
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+export type UserProfile = {
+  id: string
+  username: string
+  nama_lengkap: string | null
+  role: "admin" | "kasir"
+  aktif: boolean
+  created_at: string
+}
 
-function toActor(user: CurrentUser): ActivityActor {
-  return { id: user.id, username: user.username, role: user.role }
+export async function fetchUsers(): Promise<{ data: UserProfile[]; error?: string }> {
+  const { error: authError } = await requireAdmin()
+  if (authError) return { data: [], error: authError }
+
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, username, nama_lengkap, role, aktif, created_at
+      FROM users ORDER BY aktif DESC, created_at DESC
+    `)
+    const data: UserProfile[] = rows.map((row) => ({
+      id: String(row.id),
+      username: String(row.username),
+      nama_lengkap: row.nama_lengkap ? String(row.nama_lengkap) : null,
+      role: row.role === "admin" ? "admin" : "kasir",
+      aktif: Boolean(row.aktif),
+      created_at: utcSqlToIso(row.created_at),
+    }))
+    return { data }
+  } catch (error) {
+    console.error("fetchUsers error:", error)
+    return { data: [], error: "Daftar user gagal dimuat. Coba muat ulang halaman." }
+  }
 }
 
 function validateUsername(username: string): string | null {
@@ -28,12 +57,6 @@ function validatePassword(password: string): string | null {
   if (password.length < 8) return "Password minimal 8 karakter"
   if (password.length > 128) return "Password maksimal 128 karakter"
   return null
-}
-
-function mysqlCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code?: unknown }).code)
-    : undefined
 }
 
 async function protectsLastAdmin(connection: PoolConnection, target: RowDataPacket): Promise<boolean> {
@@ -71,7 +94,7 @@ export async function createUser(params: { username: string; password: string; n
     return { error: "Gagal membuat user baru" }
   }
 
-  await logActivity({ actor: toActor(user), action: "CREATE", entityType: "user", entityId: id, description: `Menambahkan user "${username}" sebagai ${params.role}`, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
+  await logActivity({ actor: toActivityActor(user), action: "CREATE", entityType: "user", entityId: id, description: `Menambahkan user "${username}" sebagai ${params.role}`, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
   refreshUsers()
   return { success: true }
 }
@@ -79,7 +102,7 @@ export async function createUser(params: { username: string; password: string; n
 export async function updateUser(params: { userId: string; username: string; namaLengkap: string; role: "admin" | "kasir" }) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(params.userId)) return { error: "ID user tidak valid" }
+  if (!isUuid(params.userId)) return { error: "ID user tidak valid" }
   const username = params.username.trim()
   const namaLengkap = params.namaLengkap.trim().replace(/\s+/g, " ")
   const validationError = validateUsername(username) ?? validateName(namaLengkap)
@@ -118,7 +141,7 @@ export async function updateUser(params: { userId: string; username: string; nam
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: params.userId, description: `Memperbarui akun "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "user", entityId: params.userId, description: `Memperbarui akun "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined, newValue: { username, nama_lengkap: namaLengkap || null, role: params.role } })
   refreshUsers()
   return { success: true }
 }
@@ -126,7 +149,7 @@ export async function updateUser(params: { userId: string; username: string; nam
 export async function resetPassword(userId: string, newPassword: string) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(userId)) return { error: "ID user tidak valid" }
+  if (!isUuid(userId)) return { error: "ID user tidak valid" }
   const passwordError = validatePassword(newPassword)
   if (passwordError) return { error: passwordError }
 
@@ -153,14 +176,14 @@ export async function resetPassword(userId: string, newPassword: string) {
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `Mereset password dan mencabut sesi aktif user "${username}"` })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `Mereset password dan mencabut sesi aktif user "${username}"` })
   return { success: true }
 }
 
 export async function setUserActive(userId: string, aktif: boolean) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(userId) || typeof aktif !== "boolean") return { error: "Data status tidak valid" }
+  if (!isUuid(userId) || typeof aktif !== "boolean") return { error: "Data status tidak valid" }
   if (user.id === userId && !aktif) return { error: "Akun sendiri tidak bisa dinonaktifkan" }
 
   const connection = await pool.getConnection()
@@ -193,7 +216,7 @@ export async function setUserActive(userId: string, aktif: boolean) {
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `${aktif ? "Mengaktifkan" : "Menonaktifkan"} user "${target?.username}"`, oldValue: { aktif: Boolean(target?.aktif) }, newValue: { aktif } })
+  await logActivity({ actor: toActivityActor(user), action: "UPDATE", entityType: "user", entityId: userId, description: `${aktif ? "Mengaktifkan" : "Menonaktifkan"} user "${target?.username}"`, oldValue: { aktif: Boolean(target?.aktif) }, newValue: { aktif } })
   refreshUsers()
   return { success: true }
 }
@@ -201,7 +224,7 @@ export async function setUserActive(userId: string, aktif: boolean) {
 export async function deleteUser(userId: string) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(userId)) return { error: "ID user tidak valid" }
+  if (!isUuid(userId)) return { error: "ID user tidak valid" }
   if (user.id === userId) return { error: "Akun sendiri tidak bisa dihapus" }
 
   const connection = await pool.getConnection()
@@ -235,7 +258,7 @@ export async function deleteUser(userId: string) {
     connection.release()
   }
 
-  await logActivity({ actor: toActor(user), action: "DELETE", entityType: "user", entityId: userId, description: `Menghapus user "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined })
+  await logActivity({ actor: toActivityActor(user), action: "DELETE", entityType: "user", entityId: userId, description: `Menghapus user "${target?.username}"`, oldValue: target ? { username: target.username, nama_lengkap: target.nama_lengkap, role: target.role } : undefined })
   refreshUsers()
   return { success: true }
 }

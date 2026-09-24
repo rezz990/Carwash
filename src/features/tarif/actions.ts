@@ -1,17 +1,49 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import pool from "@/lib/db"
+import { isUuid } from "@/lib/ids"
 import type { ResultSetHeader, RowDataPacket } from "mysql2"
-import { requireAdmin, type CurrentUser } from "@/lib/authz"
-import { logActivity, type ActivityActor } from "@/lib/activityLog"
+import pool, { mysqlCode } from "@/lib/db"
+import { requireAdmin } from "@/lib/authz"
+import { logActivity, toActivityActor } from "@/lib/activityLog"
+
+export type JenisKendaraan = {
+  id: string
+  kategori: string
+  ukuran: string
+  tarif_default: number
+  jatah_karyawan: number
+  jatah_pemilik: number
+  aktif: boolean
+}
+
+export async function fetchJenisKendaraan(): Promise<{ data: JenisKendaraan[]; error?: string }> {
+  const { error: authError } = await requireAdmin()
+  if (authError) return { data: [], error: authError }
+
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT id, kategori, ukuran, tarif_default, jatah_karyawan, jatah_pemilik, aktif
+      FROM jenis_kendaraan
+      ORDER BY kategori ASC, ukuran ASC
+    `)
+    const data: JenisKendaraan[] = rows.map((row) => ({
+      id: String(row.id),
+      kategori: String(row.kategori),
+      ukuran: String(row.ukuran),
+      tarif_default: Number(row.tarif_default),
+      jatah_karyawan: Number(row.jatah_karyawan),
+      jatah_pemilik: Number(row.jatah_pemilik),
+      aktif: Boolean(row.aktif),
+    }))
+    return { data }
+  } catch (error) {
+    console.error("fetchJenisKendaraan error:", error)
+    return { data: [], error: "Daftar tarif gagal dimuat. Coba muat ulang halaman." }
+  }
+}
 
 const MAX_AMOUNT = 10_000_000_000
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-function toActor(user: CurrentUser): ActivityActor {
-  return { id: user.id, username: user.username, role: user.role }
-}
 
 function validateAmounts(tarif: number, employeeShare: number): string | null {
   if (!Number.isFinite(tarif) || !Number.isFinite(employeeShare)) return "Tarif harus berupa angka"
@@ -22,12 +54,6 @@ function validateAmounts(tarif: number, employeeShare: number): string | null {
   return null
 }
 
-function mysqlCode(error: unknown): string | undefined {
-  return typeof error === "object" && error !== null && "code" in error
-    ? String((error as { code?: unknown }).code)
-    : undefined
-}
-
 function refreshTariffPages() {
   revalidatePath("/admin")
   revalidatePath("/admin/tarif")
@@ -36,7 +62,7 @@ function refreshTariffPages() {
 export async function updateTarifDefault(id: string, tarifDefault: number, jatahKaryawan: number) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(id)) return { error: "ID jenis kendaraan tidak valid" }
+  if (!isUuid(id)) return { error: "ID jenis kendaraan tidak valid" }
   const validationError = validateAmounts(tarifDefault, jatahKaryawan)
   if (validationError) return { error: validationError }
 
@@ -69,7 +95,7 @@ export async function updateTarifDefault(id: string, tarifDefault: number, jatah
   }
 
   await logActivity({
-    actor: toActor(user), action: "UPDATE", entityType: "tarif", entityId: id,
+    actor: toActivityActor(user), action: "UPDATE", entityType: "tarif", entityId: id,
     description: `Mengubah tarif "${target?.kategori} ${target?.ukuran}" menjadi Rp${tarifDefault.toLocaleString("id-ID")}`,
     oldValue: target ? { tarif_default: Number(target.tarif_default), jatah_karyawan: Number(target.jatah_karyawan), jatah_pemilik: Number(target.jatah_pemilik) } : undefined,
     newValue: { tarif_default: tarifDefault, jatah_karyawan: jatahKaryawan, jatah_pemilik: jatahPemilik },
@@ -81,7 +107,7 @@ export async function updateTarifDefault(id: string, tarifDefault: number, jatah
 export async function toggleAktifJenisKendaraan(id: string, aktif: boolean) {
   const { error: authError, user } = await requireAdmin()
   if (authError || !user) return { error: authError ?? "Anda harus login" }
-  if (!UUID_PATTERN.test(id) || typeof aktif !== "boolean") return { error: "Data status tidak valid" }
+  if (!isUuid(id) || typeof aktif !== "boolean") return { error: "Data status tidak valid" }
 
   const connection = await pool.getConnection()
   let target: RowDataPacket | undefined
@@ -107,7 +133,7 @@ export async function toggleAktifJenisKendaraan(id: string, aktif: boolean) {
   }
 
   await logActivity({
-    actor: toActor(user), action: "UPDATE", entityType: "tarif", entityId: id,
+    actor: toActivityActor(user), action: "UPDATE", entityType: "tarif", entityId: id,
     description: `${aktif ? "Mengaktifkan" : "Menonaktifkan"} jenis kendaraan "${target?.kategori} ${target?.ukuran}"`,
     oldValue: { aktif: Boolean(target?.aktif) }, newValue: { aktif },
   })
@@ -139,7 +165,7 @@ export async function createJenisKendaraan(params: { kategori: string; ukuran: s
   }
 
   await logActivity({
-    actor: toActor(user), action: "CREATE", entityType: "tarif", entityId: newId,
+    actor: toActivityActor(user), action: "CREATE", entityType: "tarif", entityId: newId,
     description: `Menambahkan jenis kendaraan "${kategori} ${ukuran}"`,
     newValue: { kategori, ukuran, tarif_default: params.tarifDefault, jatah_karyawan: params.jatahKaryawan, jatah_pemilik: jatahPemilik },
   })

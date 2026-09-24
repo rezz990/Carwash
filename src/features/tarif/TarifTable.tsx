@@ -8,16 +8,8 @@ import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
 import { createJenisKendaraan, toggleAktifJenisKendaraan, updateTarifDefault } from "./actions"
-
-export type JenisKendaraan = {
-  id: string
-  kategori: string
-  ukuran: string
-  tarif_default: number
-  jatah_karyawan: number
-  jatah_pemilik: number
-  aktif: boolean
-}
+import type { JenisKendaraan } from "./actions"
+export type { JenisKendaraan } from "./actions"
 
 function rupiah(value: number) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value)

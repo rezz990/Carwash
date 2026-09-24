@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useSyncExternalStore, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
-import { cn } from "@/utils/cn"
+import { cn } from "@/lib/cn"
 
 const subscribe = () => () => {}
 let openDialogs = 0

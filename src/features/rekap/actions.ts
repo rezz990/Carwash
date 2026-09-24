@@ -10,12 +10,8 @@ import {
   utcSqlToDate,
   utcSqlToIso,
 } from "@/lib/datetime";
-import { logActivity, type ActivityActor } from "@/lib/activityLog";
-
-function toActor(user: { id: string; username: string; role: string } | null): ActivityActor {
-  if (!user) return null;
-  return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" };
-}
+import { logActivity, toActivityActor } from "@/lib/activityLog";
+import { isUuid } from "@/lib/ids";
 
 export type RekapHarian = {
   tanggal: string;
@@ -84,7 +80,6 @@ export type PaginatedDailyTransactions = {
 };
 
 const DETAIL_PAGE_SIZE = 50;
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getHariJakarta(dateString: string | Date): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -332,7 +327,7 @@ export async function updateTransaksi(params: {
   const { error: authError, user: currentUser } = await requireAdmin();
   if (authError || !currentUser) return { error: authError ?? "Anda harus login" };
 
-  if (!UUID_PATTERN.test(params.id) || !UUID_PATTERN.test(params.jenisKendaraanId)) {
+  if (!isUuid(params.id) || !isUuid(params.jenisKendaraanId)) {
     return { error: "Data transaksi tidak valid" };
   }
 
@@ -409,7 +404,7 @@ export async function updateTransaksi(params: {
       tarif_jatah_pemilik: jatahPemilik,
     };
     await logActivity({
-      actor: toActor(currentUser),
+      actor: toActivityActor(currentUser),
       action: "UPDATE",
       entityType: "transaksi",
       entityId: params.id,
@@ -438,7 +433,7 @@ export async function updateTransaksi(params: {
 export async function deleteTransaksi(id: string) {
   const { error: authError, user: currentUser } = await requireAdmin();
   if (authError || !currentUser) return { error: authError ?? "Anda harus login" };
-  if (!UUID_PATTERN.test(id)) return { error: "ID transaksi tidak valid" };
+  if (!isUuid(id)) return { error: "ID transaksi tidak valid" };
 
   const connection = await pool.getConnection();
   let target: RowDataPacket | undefined;
@@ -462,7 +457,7 @@ export async function deleteTransaksi(id: string) {
     await connection.commit();
 
     await logActivity({
-      actor: toActor(currentUser),
+      actor: toActivityActor(currentUser),
       action: "DELETE",
       entityType: "transaksi",
       entityId: id,
