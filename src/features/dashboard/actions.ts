@@ -5,21 +5,30 @@ import { requireAdmin } from "@/lib/authz"
 import type { RowDataPacket } from "mysql2"
 import { addJakartaDays, jakartaDateToUtcSql, todayJakarta, utcSqlToIso } from "@/lib/datetime"
 
+export type BreakdownItem = {
+  label: string
+  jumlah: number
+  pendapatan: number
+}
+
 export type OverviewStats = {
   pendapatanHariIni: number
   bagianPemilikHariIni: number
   transaksiHariIni: number
   pendapatanKemarin: number
-  persenPerubahan: number | null 
+  persenPerubahan: number | null
   jumlahKasirAktif: number
   rataRataPendapatan7Hari: number
   kategoriTerlarisMingguIni: string | null
+  breakdownKasirHariIni: BreakdownItem[]
+  breakdownJenisHariIni: BreakdownItem[]
   transaksiTerbaru: {
     id: string
     tanggal_waktu: string
     kategori: string
     ukuran: string
     plat_nomor: string | null
+    nama_kasir: string
     tarif_total: number
   }[]
   error?: string
@@ -27,7 +36,7 @@ export type OverviewStats = {
 
 export async function fetchOverviewStats(): Promise<OverviewStats> {
   const { error: authError } = await requireAdmin()
-  if (authError) return { pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0, persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0, kategoriTerlarisMingguIni: null, transaksiTerbaru: [], error: authError }
+  if (authError) return { pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0, persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0, kategoriTerlarisMingguIni: null, breakdownKasirHariIni: [], breakdownJenisHariIni: [], transaksiTerbaru: [], error: authError }
   const todayStr = todayJakarta()
 
   const yesterdayStr = addJakartaDays(todayStr, -1)
@@ -39,7 +48,7 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
     const todayStart = jakartaDateToUtcSql(todayStr)
     const yesterdayStart = jakartaDateToUtcSql(yesterdayStr)
 
-    const [[summaryRows], [kategoriRows], [kasirRows], [terbaruRows]] = await Promise.all([
+    const [[summaryRows], [kategoriRows], [kasirRows], [terbaruRows], [breakdownKasirRows], [breakdownJenisRows]] = await Promise.all([
       pool.query<RowDataPacket[]>(`
         SELECT
           COALESCE(SUM(CASE WHEN tanggal_waktu >= ? THEN tarif_total ELSE 0 END), 0) AS pendapatan_hari_ini,
@@ -61,12 +70,29 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       `, [rangeStart, rangeEnd]),
       pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM users WHERE role = 'kasir' AND aktif = 1"),
       pool.query<RowDataPacket[]>(`
-        SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran
+        SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran, COALESCE(u.nama_lengkap, u.username) AS nama_kasir
         FROM transaksi t
         LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
+        LEFT JOIN users u ON t.kasir_id = u.id
         ORDER BY t.tanggal_waktu DESC
         LIMIT 5
       `),
+      pool.query<RowDataPacket[]>(`
+        SELECT COALESCE(u.nama_lengkap, u.username) AS label, COUNT(*) AS jumlah, COALESCE(SUM(t.tarif_total), 0) AS pendapatan
+        FROM transaksi t
+        JOIN users u ON u.id = t.kasir_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
+        GROUP BY u.id, u.nama_lengkap, u.username
+        ORDER BY pendapatan DESC, label ASC
+      `, [todayStart, rangeEnd]),
+      pool.query<RowDataPacket[]>(`
+        SELECT CONCAT(jk.kategori, ' ', jk.ukuran) AS label, COUNT(*) AS jumlah, COALESCE(SUM(t.tarif_total), 0) AS pendapatan
+        FROM transaksi t
+        JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+        WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
+        GROUP BY t.jenis_kendaraan_id, jk.kategori, jk.ukuran
+        ORDER BY pendapatan DESC, label ASC
+      `, [todayStart, rangeEnd]),
     ])
 
     const summary = summaryRows[0] ?? {}
@@ -90,8 +116,12 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       kategori: t.kategori || "-",
       ukuran: t.ukuran || "-",
       plat_nomor: t.plat_nomor,
+      nama_kasir: t.nama_kasir || "-",
       tarif_total: Number(t.tarif_total) || 0,
     }))
+
+    const toBreakdown = (rows: RowDataPacket[]): BreakdownItem[] =>
+      rows.map((r) => ({ label: String(r.label), jumlah: Number(r.jumlah) || 0, pendapatan: Number(r.pendapatan) || 0 }))
 
     return {
       pendapatanHariIni,
@@ -102,6 +132,8 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       jumlahKasirAktif: Number(jumlahKasirAktif) || 0,
       rataRataPendapatan7Hari: totalPendapatan7Hari / 7,
       kategoriTerlarisMingguIni,
+      breakdownKasirHariIni: toBreakdown(breakdownKasirRows),
+      breakdownJenisHariIni: toBreakdown(breakdownJenisRows),
       transaksiTerbaru,
     }
   } catch (error) {
@@ -109,7 +141,8 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
     return {
       pendapatanHariIni: 0, bagianPemilikHariIni: 0, transaksiHariIni: 0, pendapatanKemarin: 0,
       persenPerubahan: null, jumlahKasirAktif: 0, rataRataPendapatan7Hari: 0,
-      kategoriTerlarisMingguIni: null, transaksiTerbaru: [],
+      kategoriTerlarisMingguIni: null, breakdownKasirHariIni: [], breakdownJenisHariIni: [],
+      transaksiTerbaru: [],
       error: "Gagal memuat data overview",
     }
   }

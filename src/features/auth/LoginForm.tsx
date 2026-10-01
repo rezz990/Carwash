@@ -61,11 +61,12 @@ export function LoginForm() {
     >
       <AnimatePresence>
         {error && (
-          <motion.div 
+          <motion.div
+            role="alert"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="p-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-xl text-center"
+            className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl text-center"
           >
             {error}
           </motion.div>
@@ -73,14 +74,15 @@ export function LoginForm() {
       </AnimatePresence>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium leading-none text-slate-700">Username</label>
+        <label htmlFor="username" className="text-sm font-medium leading-none text-slate-700">Username</label>
         <div className="relative">
           <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input 
-            id="username" 
-            name="username" 
-            type="text" 
-            required 
+          <Input
+            id="username"
+            name="username"
+            type="text"
+            required
+            autoComplete="username"
             className="h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pl-10 rounded-xl focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-0 focus-visible:border-yellow-400 hover:border-slate-300 transition-all"
             placeholder="Masukkan username" 
           />
@@ -88,21 +90,23 @@ export function LoginForm() {
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm font-medium leading-none text-slate-700">Password</label>
+        <label htmlFor="password" className="text-sm font-medium leading-none text-slate-700">Password</label>
         <div className="relative">
           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <Input 
-            id="password" 
-            name="password" 
+          <Input
+            id="password"
+            name="password"
             type={showPassword ? "text" : "password"}
-            required 
+            required
+            autoComplete="current-password"
             className="h-12 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 pl-10 pr-11 rounded-xl focus-visible:ring-2 focus-visible:ring-yellow-400 focus-visible:ring-offset-0 focus-visible:border-yellow-400 hover:border-slate-300 transition-all"
             placeholder="Masukkan password" 
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+            aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 rounded-md text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-400 transition-colors"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
