@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { AdminShell } from "@/components/admin/AdminShell"
+import { ChangelogPopup } from "@/features/changelog/ChangelogPopup"
 import { getCurrentUser } from "@/lib/authz"
 import { getLoginTimeoutMinutes } from "@/lib/loginTimeout"
 
@@ -14,8 +15,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const loginTimeoutMinutes = await getLoginTimeoutMinutes()
 
   return (
-    <AdminShell name={user.nama_lengkap || user.username} loginTimeoutMinutes={loginTimeoutMinutes}>
-      {children}
-    </AdminShell>
+    <>
+      <AdminShell name={user.nama_lengkap || user.username} loginTimeoutMinutes={loginTimeoutMinutes}>
+        {children}
+      </AdminShell>
+      <ChangelogPopup />
+    </>
   )
 }
