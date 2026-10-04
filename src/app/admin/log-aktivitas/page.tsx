@@ -1,6 +1,6 @@
+import { ActivityLogTable } from "@/features/activity-log/ActivityLogTable"
+import { fetchActivityLogUserOptions } from "@/features/activity-log/actions"
 import { getCurrentUser } from "@/lib/authz"
-import { ActivityLogTable } from "./ActivityLogTable"
-import { fetchActivityLogUserOptions } from "./actions"
 
 export default async function LogAktivitasPage() {
   const currentUser = await getCurrentUser()
@@ -13,7 +13,9 @@ export default async function LogAktivitasPage() {
       <header>
         <p className="text-sm font-medium text-slate-500">Audit sistem</p>
         <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Log aktivitas</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Riwayat aksi penting dalam WIB. Detail perubahan dan perangkat dapat diperiksa per aktivitas.</p>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          Riwayat aksi penting dalam WIB. Detail perubahan dan perangkat dapat diperiksa per aktivitas.
+        </p>
       </header>
 
       <ActivityLogTable userOptions={userOptions} />

@@ -25,6 +25,19 @@ npm run dev
 
 Buka `http://localhost:3000`. Semua `DATETIME` di database disimpan sebagai UTC dan ditampilkan sebagai WIB (`Asia/Jakarta`).
 
+## Struktur folder
+
+```text
+src/app/         routing (halaman + API)
+src/features/    fitur admin: UI dan server actions
+src/components/  komponen UI bersama dan shell dashboard
+src/lib/         database, auth, datetime, export helper, API mobile
+src/hooks/       hook client
+src/types/       tipe bersama yang aman dipakai client dan server
+migrations/      skema MySQL (sumber kebenaran)
+supabase/        sisa CLI/skema PostgreSQL lama, bukan runtime
+```
+
 ## Pemeriksaan sebelum merge
 
 ```bash

@@ -16,24 +16,8 @@ import {
 import { OverviewChart } from "./OverviewChart"
 import { ErrorNotice } from "@/components/ui/Feedback"
 import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
-import type { OverviewStats } from "./actions"
-
-function formatRupiah(value: number) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatWaktu(iso: string) {
-  return new Date(iso).toLocaleTimeString("id-ID", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Jakarta",
-  })
-}
+import { formatRupiah, formatWaktu } from "@/lib/formatters"
+import type { BreakdownItem, OverviewStats } from "./actions"
 
 function Metric({ label, value, icon: Icon, tone = "slate", note }: {
   label: string
@@ -65,6 +49,29 @@ const quickLinks = [
   { href: "/admin/tarif", label: "Atur tarif", icon: Receipt },
   { href: "/admin/users", label: "Kelola user", icon: UserCog },
 ]
+
+function BreakdownList({ title, rows }: { title: string; rows: BreakdownItem[] }) {
+  return (
+    <article className="min-w-0 rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
+        <h2 className="text-sm font-bold text-slate-900">{title}</h2>
+        <p className="mt-0.5 text-xs text-slate-500">Transaksi hari ini</p>
+      </div>
+      <ul className="divide-y divide-slate-100">
+        {rows.map((row) => (
+          <li key={row.label} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-900">{row.label}</span>
+              <span className="text-xs text-slate-500">{row.jumlah} transaksi</span>
+            </span>
+            <strong className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{formatRupiah(row.pendapatan)}</strong>
+          </li>
+        ))}
+        {rows.length === 0 && <li className="px-5 py-8 text-center text-sm text-slate-500">Belum ada transaksi hari ini.</li>}
+      </ul>
+    </article>
+  )
+}
 
 export function DashboardContent({ stats }: { stats: OverviewStats }) {
   const router = useRouter()
@@ -111,6 +118,11 @@ export function DashboardContent({ stats }: { stats: OverviewStats }) {
         </div>
       </section>
 
+      <section aria-label="Rincian hari ini" className="grid gap-3 sm:gap-4 md:grid-cols-2">
+        <BreakdownList title="Per kasir" rows={stats.breakdownKasirHariIni} />
+        <BreakdownList title="Per jenis kendaraan" rows={stats.breakdownJenisHariIni} />
+      </section>
+
       <nav aria-label="Aksi cepat" className="grid grid-cols-3 gap-2 sm:gap-3">
         {quickLinks.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-yellow-300 hover:bg-yellow-50 sm:flex-row sm:text-sm">
@@ -131,7 +143,7 @@ export function DashboardContent({ stats }: { stats: OverviewStats }) {
             <div key={transaction.id} className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
               <span className="flex min-w-0 items-center gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-yellow-50 text-yellow-700"><CarFront size={19} /></span>
-                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{transaction.kategori} {transaction.ukuran}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{transaction.plat_nomor === "B0000XX" ? "Tanpa plat" : transaction.plat_nomor || "Tanpa plat"} · {formatWaktu(transaction.tanggal_waktu)} WIB</span></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{transaction.kategori} {transaction.ukuran}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{transaction.plat_nomor === "B0000XX" ? "Tanpa plat" : transaction.plat_nomor || "Tanpa plat"} · {transaction.nama_kasir} · {formatWaktu(transaction.tanggal_waktu)} WIB</span></span>
               </span>
               <strong className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{formatRupiah(transaction.tarif_total)}</strong>
             </div>

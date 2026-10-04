@@ -74,6 +74,13 @@ export type ActivityActor = {
   role?: "kasir" | "admin" | null
 } | null
 
+export function toActivityActor(
+  user: { id: string; username: string; role: string } | null | undefined
+): ActivityActor {
+  if (!user) return null
+  return { id: user.id, username: user.username, role: user.role as "admin" | "kasir" }
+}
+
 export type LogActivityParams = {
   actor: ActivityActor
   action: ActivityAction

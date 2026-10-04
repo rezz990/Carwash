@@ -1,5 +1,5 @@
 {
-  "name": "temp-app",
+  "name": "carwash-admin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,8 @@
     "migrate-data": "tsx scripts/migrate-data.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:create-admin": "tsx scripts/create-admin.ts",
-    "db:seed-demo": "tsx scripts/seed-demo.ts"
+    "db:seed-demo": "tsx scripts/seed-demo.ts",
+    "bundle": "node scripts/bundle-deploy.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

@@ -1,5 +1,5 @@
-import { fetchOverviewStats } from "./actions"
-import { DashboardContent } from "./DashboardContent"
+import { DashboardContent } from "@/features/dashboard/DashboardContent"
+import { fetchOverviewStats } from "@/features/dashboard/actions"
 
 export default async function AdminDashboard() {
   const stats = await fetchOverviewStats()

@@ -8,15 +8,8 @@ import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
 import { createUser, deleteUser, resetPassword, setUserActive, updateUser } from "./actions"
-
-export type UserProfile = {
-  id: string
-  username: string
-  nama_lengkap: string | null
-  role: "admin" | "kasir"
-  aktif: boolean
-  created_at: string
-}
+import type { UserProfile } from "./actions"
+export type { UserProfile } from "./actions"
 
 function UserForm({ user, currentUserId, onClose, onSaved }: {
   user?: UserProfile

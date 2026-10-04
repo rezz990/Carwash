@@ -7,8 +7,7 @@ import { DateRangeFields } from "@/components/ui/DateRangeFields"
 import { ErrorNotice } from "@/components/ui/Feedback"
 import { Input } from "@/components/ui/Input"
 import { Modal } from "@/components/ui/Modal"
-import { BUSINESS_TIMEZONE } from "@/lib/datetime"
-import { addWibDays, todayWib } from "@/lib/formatters"
+import { BUSINESS_TIMEZONE, addJakartaDays, todayJakarta } from "@/lib/datetime"
 import { parseUserAgent } from "@/lib/userAgent"
 import { fetchActivityLogs, type ActivityLogFilters, type ActivityLogRow } from "./actions"
 
@@ -54,7 +53,7 @@ function DetailModal({ row, onClose }: { row: ActivityLogRow; onClose: () => voi
 }
 
 export function ActivityLogTable({ userOptions }: { userOptions: { id: string; label: string }[] }) {
-  const [dateFrom,setDateFrom]=useState(addWibDays(todayWib(),-7)); const [dateTo,setDateTo]=useState(todayWib())
+  const [dateFrom,setDateFrom]=useState(addJakartaDays(todayJakarta(),-7)); const [dateTo,setDateTo]=useState(todayJakarta())
   const [action,setAction]=useState("all"); const [entityType,setEntityType]=useState("all"); const [userId,setUserId]=useState("all"); const [search,setSearch]=useState("")
   const [rows,setRows]=useState<ActivityLogRow[]>([]); const [total,setTotal]=useState(0); const [page,setPage]=useState(1); const [error,setError]=useState("")
   const [selected,setSelected]=useState<ActivityLogRow|null>(null); const [filterOpen,setFilterOpen]=useState(false); const [pending,startTransition]=useTransition(); const sequence=useRef(0)
