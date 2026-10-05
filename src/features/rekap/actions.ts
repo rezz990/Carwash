@@ -40,6 +40,7 @@ export type TransaksiDetail = {
   kategori: string;
   ukuran: string;
   kasir_nama: string | null;
+  petugas_nama: string | null;
 };
 
 export type RekapResult = {
@@ -277,10 +278,11 @@ export async function fetchTransactionsForDate(params: {
       pool.query<RowDataPacket[]>(`
         SELECT t.id, t.jenis_kendaraan_id, t.tanggal_waktu, t.edited_at, t.plat_nomor, t.tarif_total,
                t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, jk.kategori, jk.ukuran,
-               u.username, u.nama_lengkap
+               u.username, u.nama_lengkap, p.nama AS petugas_nama
         FROM transaksi t
         LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
         LEFT JOIN users u ON u.id = t.kasir_id
+        LEFT JOIN petugas_cuci p ON p.id = t.petugas_id
         WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ? ${searchSql}
         ORDER BY t.tanggal_waktu DESC
         LIMIT ? OFFSET ?`,
@@ -307,6 +309,7 @@ export async function fetchTransactionsForDate(params: {
         tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan), tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik),
         kategori: row.kategori || "-", ukuran: row.ukuran || "-",
         kasir_nama: row.nama_lengkap || row.username || null,
+        petugas_nama: row.petugas_nama || null,
       })),
       total: Number(summary.total), page, pageSize: DETAIL_PAGE_SIZE,
       totalPendapatanKotor: Number(summary.kotor), totalBagianKaryawan: Number(summary.karyawan),

@@ -143,7 +143,7 @@ export function DashboardContent({ stats }: { stats: OverviewStats }) {
             <div key={transaction.id} className="flex items-center justify-between gap-3 px-4 py-3.5 sm:px-5">
               <span className="flex min-w-0 items-center gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-yellow-50 text-yellow-700"><CarFront size={19} /></span>
-                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{transaction.kategori} {transaction.ukuran}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{transaction.plat_nomor === "B0000XX" ? "Tanpa plat" : transaction.plat_nomor || "Tanpa plat"} · {transaction.nama_kasir} · {formatWaktu(transaction.tanggal_waktu)} WIB</span></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-semibold text-slate-900">{transaction.kategori} {transaction.ukuran}</span><span className="mt-0.5 block truncate text-xs text-slate-500">{transaction.plat_nomor === "B0000XX" ? "Tanpa plat" : transaction.plat_nomor || "Tanpa plat"} · {transaction.nama_kasir} · Petugas: {transaction.petugas_nama} · {formatWaktu(transaction.tanggal_waktu)} WIB</span></span>
               </span>
               <strong className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">{formatRupiah(transaction.tarif_total)}</strong>
             </div>

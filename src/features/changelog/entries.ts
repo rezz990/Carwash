@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 // Popup "Apa yang baru?" memakai entri pertama sebagai versi terbaru.
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.2.0",
+    tanggal: "5 Oktober 2026",
+    items: [
+      "Fitur baru: kelola petugas cuci di menu Petugas Cuci. Setiap transaksi kasir kini mencatat satu petugas.",
+      "Aplikasi kasir memilih petugas dari daftar petugas aktif; petugas yang dinonaktifkan tidak bisa dipakai untuk transaksi baru.",
+      "Nama petugas tampil di Transaksi terbaru dan detail transaksi per tanggal. Transaksi lama tetap aman tampil tanpa petugas.",
+    ],
+  },
+  {
     version: "1.1.0",
     tanggal: "5 Oktober 2026",
     items: [

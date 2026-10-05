@@ -1,237 +1,224 @@
 // scripts/bundle-deploy.mjs
 //
-// Build Next.js (standalone output) lalu bundle jadi 2 zip siap upload ke cPanel:
+// Bundle deployment untuk cPanel dari output Next.js standalone.
 //
-//   deploy/standalone.zip -> isi dari .next/standalone
-//   deploy/static.zip     -> folder "static" dari .next
+// Alur:
+//   1. npm run build (opsional, lewati dengan --skip-build)
+//   2. public + .next/static disalin ke .next/standalone
+//      lewat scripts/prepare-standalone.mjs
+//   3. seluruh isi .next/standalone dikemas menjadi deploy/standalone.zip
 //
-// Cross-platform:
-//   - Windows
-//   - Linux
-//   - macOS
+// Satu zip berisi semuanya: server.js, node_modules, .next (server + static),
+// dan public. Upload zip ke folder aplikasi cPanel, Extract, lalu restart
+// Node.js App.
+//
+// Difokuskan untuk Windows dan aman dijalankan dari cmd maupun PowerShell.
+// ZIP ditulis murni dengan API Node.js (tanpa perintah `zip`, tanpa
+// Compress-Archive), jadi tidak butuh tool eksternal dan separator path di
+// dalam zip selalu memakai "/" sehingga aman di-extract `unzip` di Linux.
 //
 // Usage:
-//   node scripts/bundle-deploy.mjs
-//   node scripts/bundle-deploy.mjs --skip-build
-//
-// Tidak membutuhkan syntax shell seperti:
-//   &&
-//   |
-//   >>
-//   rm -rf
-//   mkdir -p
-//
-// Script menggunakan Node.js API langsung sehingga terminal
-// PowerShell / CMD / Bash / Zsh tidak memengaruhi cara kerjanya.
+//   npm run bundle
+//   npm run bundle -- --skip-build
+//   node scripts/bundle-deploy.mjs [--skip-build]
 
 import { execFileSync } from "node:child_process"
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
+  readFileSync,
   rmSync,
+  statSync,
+  writeFileSync,
 } from "node:fs"
 import path from "node:path"
-
-const root = process.cwd()
-const skipBuild = process.argv.includes("--skip-build")
+import { fileURLToPath } from "node:url"
+import { deflateRawSync } from "node:zlib"
 
 const isWindows = process.platform === "win32"
+const skipBuild = process.argv.includes("--skip-build")
 
-const standaloneDir = path.join(root, ".next", "standalone")
-const staticDir = path.join(root, ".next", "static")
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+
 const nextDir = path.join(root, ".next")
+const standaloneDir = path.join(nextDir, "standalone")
+const staticDir = path.join(nextDir, "static")
+const publicDir = path.join(root, "public")
+const prepareScript = path.join(root, "scripts", "prepare-standalone.mjs")
 
 const deployDir = path.join(root, "deploy")
-const standaloneZip = path.join(deployDir, "standalone.zip")
-const staticZip = path.join(deployDir, "static.zip")
+const bundleZip = path.join(deployDir, "standalone.zip")
 
-function getCommand(command) {
-  if (isWindows && command === "npm") {
-    return "npm"
-  }
+function runNodeScript(scriptPath) {
+  console.log(`$ node ${path.relative(root, scriptPath)}`)
 
-  return command
-}
-
-function run(command, args, options = {}) {
-  const executable = getCommand(command)
-
-  console.log(`$ ${executable} ${args.join(" ")}`)
-
-  execFileSync(executable, args, {
+  execFileSync(process.execPath, [scriptPath], {
     stdio: "inherit",
-    windowsHide: false,
-    shell: isWindows,
-    ...options,
+    cwd: root,
   })
 }
 
-function commandExists(command, args = ["--version"]) {
-  try {
-    execFileSync(getCommand(command), args, {
-      stdio: "ignore",
-    })
+function runBuild() {
+  console.log("$ npm run build")
 
-    return true
-  } catch {
-    return false
-  }
-}
-
-function ensureZipAvailable() {
-  // Prefer native zip because it works consistently on Unix-like systems.
-  if (commandExists("zip", ["-v"])) {
-    return "zip"
-  }
-
-  // Windows normally has PowerShell available even when `zip`
-  // is not installed.
-  if (isWindows && commandExists("powershell", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion"])) {
-    return "powershell"
-  }
-
-  console.error("")
-  console.error("Tidak menemukan tool untuk membuat ZIP.")
-  console.error("")
-
-  if (isWindows) {
-    console.error("Windows:")
-    console.error("  PowerShell tidak tersedia.")
-    console.error("  Pastikan PowerShell tersedia di sistem.")
-  } else {
-    console.error("Linux/macOS:")
-    console.error("  Install command `zip` terlebih dahulu.")
-    console.error("")
-    console.error("Ubuntu/Debian:")
-    console.error("  sudo apt install zip")
-    console.error("")
-    console.error("Arch/CachyOS:")
-    console.error("  sudo pacman -S zip")
-    console.error("")
-    console.error("macOS:")
-    console.error("  zip biasanya sudah tersedia.")
-  }
-
-  process.exit(1)
-}
-
-function zipWithNativeZip(sourceDir, outputZip, entries) {
-  run(
-    "zip",
-    [
-      "-r",
-      "-q",
-      outputZip,
-      ...entries,
-    ],
-    {
-      cwd: sourceDir,
-    },
-  )
-}
-
-function zipWithPowerShell(sourceDir, outputZip, mode) {
-  /*
-   * Compress-Archive dipanggil langsung sebagai executable PowerShell,
-   * bukan melalui CMD/Bash.
-   *
-   * mode:
-   *   contents -> isi sourceDir masuk ke root ZIP
-   *   folder   -> folder sourceDir sendiri masuk ke ZIP
-   */
-
-  const source = sourceDir.replace(/'/g, "''")
-  const destination = outputZip.replace(/'/g, "''")
-
-  let command
-
-  if (mode === "contents") {
-    command = `
-      $ErrorActionPreference = 'Stop'
-      $source = '${source}'
-      $destination = '${destination}'
-      Compress-Archive -Path (Join-Path $source '*') -DestinationPath $destination -Force
-    `
-  } else {
-    command = `
-      $ErrorActionPreference = 'Stop'
-      $source = '${source}'
-      $destination = '${destination}'
-      Compress-Archive -Path $source -DestinationPath $destination -Force
-    `
-  }
-
-  run(
-    "powershell",
-    [
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-      command,
-    ],
-  )
-}
-
-function createZip(sourceDir, outputZip, mode, zipTool) {
-  rmSync(outputZip, {
-    force: true,
-  })
-
-  if (zipTool === "zip") {
-    if (mode === "contents") {
-      zipWithNativeZip(
-        sourceDir,
-        outputZip,
-        ["."],
-      )
-    } else {
-      const parentDir = path.dirname(sourceDir)
-      const folderName = path.basename(sourceDir)
-
-      zipWithNativeZip(
-        parentDir,
-        outputZip,
-        [folderName],
-      )
-    }
-
-    return
-  }
-
-  if (zipTool === "powershell") {
-    zipWithPowerShell(
-      sourceDir,
-      outputZip,
-      mode,
-    )
-
-    return
-  }
-
-  throw new Error(`ZIP tool tidak dikenal: ${zipTool}`)
-}
-
-function runNodeScript(script, args = [], options = {}) {
   const npmCli = process.env.npm_execpath
 
-  if (!npmCli) {
-    throw new Error(
-      "npm_execpath tidak tersedia. Jalankan script melalui npm.",
-    )
+  if (npmCli) {
+    // Dijalankan lewat `npm run bundle`.
+    execFileSync(process.execPath, [npmCli, "run", "build"], {
+      stdio: "inherit",
+      cwd: root,
+    })
+    return
   }
 
-  console.log(`$ node ${npmCli} ${args.join(" ")}`)
-
-  execFileSync(
-    process.execPath,
-    [npmCli, ...args],
-    {
+  if (isWindows) {
+    // Dijalankan langsung `node scripts/bundle-deploy.mjs` dari cmd/PowerShell.
+    // npm dipanggil lewat cmd agar tidak bergantung pada shell pemanggil.
+    execFileSync(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "npm run build"], {
       stdio: "inherit",
-      ...options,
-    },
-  )
+      cwd: root,
+    })
+    return
+  }
+
+  execFileSync("npm", ["run", "build"], {
+    stdio: "inherit",
+    cwd: root,
+  })
+}
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256)
+
+  for (let index = 0; index < 256; index++) {
+    let value = index
+
+    for (let bit = 0; bit < 8; bit++) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1
+    }
+
+    table[index] = value >>> 0
+  }
+
+  return table
+})()
+
+function crc32(buffer) {
+  let crc = 0xffffffff
+
+  for (let index = 0; index < buffer.length; index++) {
+    crc = CRC_TABLE[(crc ^ buffer[index]) & 0xff] ^ (crc >>> 8)
+  }
+
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function collectFiles(dir, prefix, files) {
+  const entries = readdirSync(dir, { withFileTypes: true })
+
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    const zipPath = prefix ? `${prefix}/${entry.name}` : entry.name
+
+    let isDirectory = entry.isDirectory()
+    let isFile = entry.isFile()
+
+    if (entry.isSymbolicLink()) {
+      const stats = statSync(fullPath)
+
+      isDirectory = stats.isDirectory()
+      isFile = stats.isFile()
+    }
+
+    if (isDirectory) {
+      collectFiles(fullPath, zipPath, files)
+    } else if (isFile) {
+      files.set(zipPath, fullPath)
+    }
+  }
+}
+
+function createZip(sourceDir, outputZip) {
+  const files = new Map()
+
+  collectFiles(sourceDir, "", files)
+
+  console.log(`Mengemas ${files.size} file dari ${path.relative(root, sourceDir)} ...`)
+
+  // Timestamp tetap supaya zip yang dihasilkan deterministik.
+  const dosTime = 0
+  const dosDate = ((2024 - 1980) << 9) | (1 << 5) | 1
+
+  const localParts = []
+  const centralParts = []
+  let offset = 0
+
+  for (const [zipPath, filePath] of files) {
+    const content = readFileSync(filePath)
+    const deflated = deflateRawSync(content)
+    const useDeflate = deflated.length < content.length
+    const method = useDeflate ? 8 : 0
+    const data = useDeflate ? deflated : content
+    const nameBuffer = Buffer.from(zipPath, "utf8")
+    const crc = crc32(content)
+
+    // Local file header (30 byte) + nama + isi.
+    const localHeader = Buffer.alloc(30)
+
+    localHeader.writeUInt32LE(0x04034b50, 0)
+    localHeader.writeUInt16LE(20, 4)
+    localHeader.writeUInt16LE(0x0800, 6) // flag: nama file UTF-8
+    localHeader.writeUInt16LE(method, 8)
+    localHeader.writeUInt16LE(dosTime, 10)
+    localHeader.writeUInt16LE(dosDate, 12)
+    localHeader.writeUInt32LE(crc, 14)
+    localHeader.writeUInt32LE(data.length, 18)
+    localHeader.writeUInt32LE(content.length, 22)
+    localHeader.writeUInt16LE(nameBuffer.length, 26)
+    localHeader.writeUInt16LE(0, 28)
+
+    localParts.push(localHeader, nameBuffer, data)
+
+    // Central directory entry (46 byte) + nama.
+    const centralHeader = Buffer.alloc(46)
+
+    centralHeader.writeUInt32LE(0x02014b50, 0)
+    centralHeader.writeUInt16LE(20, 4)
+    centralHeader.writeUInt16LE(20, 6)
+    centralHeader.writeUInt16LE(0x0800, 8)
+    centralHeader.writeUInt16LE(method, 10)
+    centralHeader.writeUInt16LE(dosTime, 12)
+    centralHeader.writeUInt16LE(dosDate, 14)
+    centralHeader.writeUInt32LE(crc, 16)
+    centralHeader.writeUInt32LE(data.length, 20)
+    centralHeader.writeUInt32LE(content.length, 24)
+    centralHeader.writeUInt16LE(nameBuffer.length, 28)
+    centralHeader.writeUInt32LE(0, 38)
+    centralHeader.writeUInt32LE(offset, 42)
+
+    centralParts.push(centralHeader, nameBuffer)
+
+    offset += localHeader.length + nameBuffer.length + data.length
+  }
+
+  const centralSize = centralParts.reduce((total, part) => total + part.length, 0)
+
+  // End of central directory record (22 byte).
+  const endRecord = Buffer.alloc(22)
+
+  endRecord.writeUInt32LE(0x06054b50, 0)
+  endRecord.writeUInt16LE(files.size, 8)
+  endRecord.writeUInt16LE(files.size, 10)
+  endRecord.writeUInt32LE(centralSize, 12)
+  endRecord.writeUInt32LE(offset, 16)
+
+  writeFileSync(outputZip, Buffer.concat([...localParts, ...centralParts, endRecord]))
+
+  return files.size
 }
 
 function main() {
@@ -244,87 +231,61 @@ function main() {
   console.log(`Root    : ${root}`)
   console.log("")
 
-  const zipTool = ensureZipAvailable()
-
-  console.log(`ZIP tool: ${zipTool}`)
-  console.log("")
-
-  if (!skipBuild) {
-    console.log("== Building (npm run build) ==")
-
-    runNodeScript(
-      "npm",
-      ["run", "build"],
-    )
-
+  if (skipBuild) {
+    console.log("== Skip build, memakai hasil .next sebelumnya ==")
     console.log("")
   } else {
-    console.log("== Skip build, menggunakan hasil .next sebelumnya ==")
+    console.log("== Build ==")
+    runBuild()
     console.log("")
   }
 
-  if (!existsSync(standaloneDir)) {
-    console.error(
-      `Tidak ketemu:\n${standaloneDir}\n\n` +
-      'Pastikan build berhasil dan `output: "standalone"` aktif di next.config.',
-    )
+  const requiredDirs = [
+    ["standalone", standaloneDir],
+    ["static", staticDir],
+    ["public", publicDir],
+  ]
 
+  for (const [label, dir] of requiredDirs) {
+    if (!existsSync(dir)) {
+      console.error(`Tidak ketemu folder ${label}:\n${dir}\n`)
+      console.error("Jalankan `npm run bundle` tanpa --skip-build.")
+      process.exit(1)
+    }
+  }
+
+  console.log("== Menyiapkan aset standalone (public + static) ==")
+  runNodeScript(prepareScript)
+  console.log("")
+
+  if (!existsSync(path.join(standaloneDir, "server.js"))) {
+    console.error(`Tidak ketemu:\n${path.join(standaloneDir, "server.js")}\n`)
+    console.error('Pastikan `output: "standalone"` aktif di next.config.ts, lalu build ulang.')
     process.exit(1)
   }
 
-  if (!existsSync(staticDir)) {
-    console.error(
-      `Tidak ketemu:\n${staticDir}\n\n` +
-      "Build sepertinya belum menghasilkan aset static.",
-    )
+  rmSync(deployDir, { recursive: true, force: true })
+  mkdirSync(deployDir, { recursive: true })
 
-    process.exit(1)
-  }
+  console.log("== Membuat deploy/standalone.zip ==")
+  const fileCount = createZip(standaloneDir, bundleZip)
 
-  rmSync(deployDir, {
-    recursive: true,
-    force: true,
-  })
-
-  mkdirSync(deployDir, {
-    recursive: true,
-  })
-
-  console.log("== Creating standalone.zip ==")
-
-  createZip(
-    standaloneDir,
-    standaloneZip,
-    "contents",
-    zipTool,
-  )
-
-  console.log("")
-  console.log("== Creating static.zip ==")
-
-  createZip(
-    staticDir,
-    staticZip,
-    "folder",
-    zipTool,
-  )
+  const sizeMb = (statSync(bundleZip).size / 1024 / 1024).toFixed(1)
 
   console.log("")
   console.log("========================================")
-  console.log(" Deployment bundle selesai")
+  console.log(" Selesai")
   console.log("========================================")
   console.log("")
-  console.log(`Standalone : ${path.relative(root, standaloneZip)}`)
-  console.log(`Static     : ${path.relative(root, staticZip)}`)
+  console.log(`Zip : ${path.relative(root, bundleZip)} (${sizeMb} MB, ${fileCount} file)`)
+  console.log("Isi : server.js, node_modules/, .next/ (server + static), public/")
   console.log("")
-
-  console.log("File siap di-upload ke cPanel.")
+  console.log("Pasang di cPanel:")
+  console.log("  1. Buka File Manager ke folder aplikasi (mis. dev.bujon.my.id).")
+  console.log("  2. Upload deploy/standalone.zip lalu Extract (timpa file lama).")
+  console.log("     Lewat terminal cPanel: unzip -o standalone.zip -d .")
+  console.log("  3. Restart Node.js App.")
   console.log("")
-  console.log("Di cPanel/Linux:")
-  console.log("  unzip -o standalone.zip -d .")
-  console.log("  unzip -o static.zip -d .next")
-  console.log("")
-  console.log("Setelah itu restart Node.js App dari cPanel.")
 }
 
 main()

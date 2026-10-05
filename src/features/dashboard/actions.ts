@@ -29,6 +29,7 @@ export type OverviewStats = {
     ukuran: string
     plat_nomor: string | null
     nama_kasir: string
+    petugas_nama: string
     tarif_total: number
   }[]
   error?: string
@@ -70,10 +71,11 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       `, [rangeStart, rangeEnd]),
       pool.query<RowDataPacket[]>("SELECT COUNT(*) AS count FROM users WHERE role = 'kasir' AND aktif = 1"),
       pool.query<RowDataPacket[]>(`
-        SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran, COALESCE(u.nama_lengkap, u.username) AS nama_kasir
+        SELECT t.id, t.tanggal_waktu, t.plat_nomor, t.tarif_total, jk.kategori, jk.ukuran, COALESCE(u.nama_lengkap, u.username) AS nama_kasir, p.nama AS petugas_nama
         FROM transaksi t
         LEFT JOIN jenis_kendaraan jk ON t.jenis_kendaraan_id = jk.id
         LEFT JOIN users u ON t.kasir_id = u.id
+        LEFT JOIN petugas_cuci p ON t.petugas_id = p.id
         ORDER BY t.tanggal_waktu DESC
         LIMIT 5
       `),
@@ -117,6 +119,7 @@ export async function fetchOverviewStats(): Promise<OverviewStats> {
       ukuran: t.ukuran || "-",
       plat_nomor: t.plat_nomor,
       nama_kasir: t.nama_kasir || "-",
+      petugas_nama: t.petugas_nama || "-",
       tarif_total: Number(t.tarif_total) || 0,
     }))
 
