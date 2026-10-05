@@ -26,6 +26,7 @@ import {
 } from "@/lib/events";
 
 import { requireAdmin } from "@/lib/authz";
+import { isUuid } from "@/lib/ids";
 import { logActivity } from "@/lib/activityLog";
 import {
   hasClientTransactionId,
@@ -47,6 +48,8 @@ interface MobileTransactionRow extends RowDataPacket {
   tarif_jatah_karyawan: string | number;
   tarif_jatah_pemilik: string | number;
   kasir_id: string;
+  petugas_id: string | null;
+  petugas_nama: string | null;
   kategori: string;
   ukuran: string;
 }
@@ -66,10 +69,13 @@ async function findMobileTransaction(
       t.tarif_jatah_karyawan,
       t.tarif_jatah_pemilik,
       t.kasir_id,
+      t.petugas_id,
+      p.nama AS petugas_nama,
       j.kategori,
       j.ukuran
     FROM transaksi t
     JOIN jenis_kendaraan j ON j.id = t.jenis_kendaraan_id
+    LEFT JOIN petugas_cuci p ON p.id = t.petugas_id
     WHERE t.id = ? AND t.kasir_id = ?
     LIMIT 1`,
     [id, kasirId],
@@ -78,14 +84,25 @@ async function findMobileTransaction(
   return rows[0] ?? null;
 }
 
+function petugasPayload(id: unknown, nama: unknown) {
+  if (!id) return null;
+  return { id: String(id), nama: nama ? String(nama) : null };
+}
+
 function isSameTransactionRequest(
   existing: MobileTransactionRow,
   jenisKendaraanId: string,
   plate: string,
+  petugasId: string | null,
 ) {
+  const existingPetugasId = existing.petugas_id
+    ? String(existing.petugas_id)
+    : null;
+
   return (
     String(existing.jenis_kendaraan_id) === jenisKendaraanId &&
-    normalizePlate(existing.plat_nomor) === plate
+    normalizePlate(existing.plat_nomor) === plate &&
+    existingPetugasId === petugasId
   );
 }
 
@@ -105,6 +122,7 @@ function existingTransactionPayload(
     tarif: Number(existing.tarif_total),
     jatahKaryawan: Number(existing.tarif_jatah_karyawan),
     jatahPemilik: Number(existing.tarif_jatah_pemilik),
+    petugas: petugasPayload(existing.petugas_id, existing.petugas_nama),
     kasir: user,
   };
 }
@@ -156,6 +174,14 @@ export async function POST(request: Request) {
       body?.clientTransactionId,
     );
 
+    // Dinormalisasi ke huruf kecil agar cocok dengan ID yang dibuat admin
+    // (crypto.randomUUID).
+    const petugasId = String(
+      body?.petugasId ?? "",
+    )
+      .trim()
+      .toLowerCase();
+
     if (!jenisKendaraanId) {
       return jsonError(
         400,
@@ -199,7 +225,14 @@ export async function POST(request: Request) {
       );
 
       if (existing) {
-        if (!isSameTransactionRequest(existing, jenisKendaraanId, plate)) {
+        if (
+          !isSameTransactionRequest(
+            existing,
+            jenisKendaraanId,
+            plate,
+            petugasId || null,
+          )
+        ) {
           return jsonError(
             409,
             "IDEMPOTENCY_CONFLICT",
@@ -215,6 +248,28 @@ export async function POST(request: Request) {
           }),
         });
       }
+    }
+
+    /*
+     * Validasi petugas dilakukan SETELAH pengecekan idempotensi supaya retry
+     * transaksi lama (yang tersimpan sebelum fitur petugas ada) tetap
+     * dikembalikan sebagai duplicate, bukan error.
+     */
+
+    if (!petugasId) {
+      return jsonError(
+        400,
+        "INVALID_INPUT",
+        "Petugas cuci wajib dipilih",
+      );
+    }
+
+    if (!isUuid(petugasId)) {
+      return jsonError(
+        400,
+        "INVALID_INPUT",
+        "petugasId harus berupa UUID yang valid",
+      );
     }
 
     await connection.beginTransaction();
@@ -248,6 +303,41 @@ export async function POST(request: Request) {
         404,
         "VEHICLE_NOT_FOUND",
         "Jenis kendaraan tidak ditemukan atau tidak aktif",
+      );
+    }
+
+    /* ===============================
+       Ambil petugas cuci
+       =============================== */
+
+    const [workerRows] =
+      await connection.query<RowDataPacket[]>(
+        `SELECT id, nama, aktif
+        FROM petugas_cuci
+        WHERE id = ?
+        LIMIT 1`,
+        [petugasId],
+      );
+
+    const worker = workerRows[0];
+
+    if (!worker) {
+      await connection.rollback();
+
+      return jsonError(
+        404,
+        "WORKER_NOT_FOUND",
+        "Petugas cuci tidak ditemukan",
+      );
+    }
+
+    if (!worker.aktif) {
+      await connection.rollback();
+
+      return jsonError(
+        409,
+        "WORKER_INACTIVE",
+        "Petugas cuci sudah nonaktif",
       );
     }
 
@@ -368,9 +458,10 @@ export async function POST(request: Request) {
         tarif_total,
         tarif_jatah_karyawan,
         tarif_jatah_pemilik,
-        kasir_id
+        kasir_id,
+        petugas_id
       )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           sqlDate,
@@ -380,6 +471,7 @@ export async function POST(request: Request) {
           jatahKaryawan,
           jatahPemilik,
           auth.user.id,
+          petugasId,
         ],
       );
     } catch (error) {
@@ -392,7 +484,15 @@ export async function POST(request: Request) {
           auth.user.id,
         );
 
-        if (existing && isSameTransactionRequest(existing, jenisKendaraanId, plate)) {
+        if (
+          existing &&
+          isSameTransactionRequest(
+            existing,
+            jenisKendaraanId,
+            plate,
+            petugasId || null,
+          )
+        ) {
           return jsonOk({
             duplicate: true,
             transaction: existingTransactionPayload(existing, {
@@ -439,6 +539,8 @@ export async function POST(request: Request) {
           tarif_total: tarif,
           tarif_jatah_karyawan: jatahKaryawan,
           tarif_jatah_pemilik: jatahPemilik,
+          petugas_id: petugasId,
+          petugas_nama: String(worker.nama),
         },
         ip: getClientIp(request),
         userAgent: request.headers.get("user-agent"),
@@ -524,6 +626,11 @@ export async function POST(request: Request) {
           jatahKaryawan,
 
           jatahPemilik,
+
+          petugas: {
+            id: petugasId,
+            nama: String(worker.nama),
+          },
 
           /*
            * RESPONSE INI TETAP DIPERTAHANKAN
@@ -860,12 +967,16 @@ export async function GET(request: Request) {
           t.tarif_total,
           t.tarif_jatah_karyawan,
           t.tarif_jatah_pemilik,
+          t.petugas_id,
+          p.nama AS petugas_nama,
           jk.id AS jenis_id,
           jk.kategori,
           jk.ukuran
         FROM transaksi t
         JOIN jenis_kendaraan jk
           ON jk.id = t.jenis_kendaraan_id
+        LEFT JOIN petugas_cuci p
+          ON p.id = t.petugas_id
         WHERE ${whereSql}
         ORDER BY t.tanggal_waktu DESC
         LIMIT ?
@@ -934,6 +1045,11 @@ export async function GET(request: Request) {
           Number(
             r.tarif_jatah_pemilik,
           ),
+
+        petugas: petugasPayload(
+          r.petugas_id,
+          r.petugas_nama,
+        ),
 
         jenisKendaraan: {
           id: String(r.jenis_id),

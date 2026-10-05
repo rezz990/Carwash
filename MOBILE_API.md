@@ -5,6 +5,7 @@ Android tidak terhubung langsung ke MySQL/MariaDB. Android memakai HTTPS API Nex
 ## Base URL
 
 - Production: gunakan HTTPS. https://app.bujon.my.id/
+- Development: gunakan HTTPS. https://dev.bujon.my.id/
 
 ## Auth
 ### POST `/api/mobile/auth/login`
@@ -32,6 +33,9 @@ Mengembalikan user aktif.
 ### GET `/api/mobile/vehicles`
 Mengembalikan kendaraan aktif beserta tarif, jatah karyawan, dan jatah pemilik dari database.
 
+### GET `/api/mobile/workers`
+Mengembalikan petugas cuci yang aktif (`{"data":[{"id":"uuid","nama":"..."}]}`). Petugas nonaktif tidak muncul dan tidak bisa dipakai untuk transaksi baru.
+
 ## Transaksi
 ### POST `/api/mobile/transactions`
 ```json
@@ -39,28 +43,31 @@ Mengembalikan kendaraan aktif beserta tarif, jatah karyawan, dan jatah pemilik d
   "clientTransactionId":"uuid-stabil-dari-android",
   "jenisKendaraanId":"uuid",
   "platNomor":"D1234ABC",
-  "tanggalWaktu":"2026-09-23T10:30:00+07:00"
+  "tanggalWaktu":"2026-09-23T10:30:00+07:00",
+  "petugasId":"uuid"
 }
 ```
 `clientTransactionId` harus dibuat satu kali saat transaksi disimpan di Android dan wajib dipertahankan untuk seluruh retry transaksi yang sama. Backend memakai ID tersebut sebagai ID transaksi sehingga request yang terkirim ulang tidak membuat transaksi ganda. Jika transaksi sudah tersimpan dengan payload yang sama, API mengembalikan sukses dengan `duplicate: true`. Jika ID yang sama dipakai untuk transaksi berbeda, API mengembalikan `IDEMPOTENCY_CONFLICT`.
 
+`petugasId` wajib untuk transaksi baru: satu transaksi mencatat tepat satu petugas cuci. Server menolak petugas yang tidak ada (`WORKER_NOT_FOUND`) atau nonaktif (`WORKER_INACTIVE`). Perbandingan idempotency ikut menyertakan `petugasId`; ID sama dengan `petugasId` berbeda mengembalikan `IDEMPOTENCY_CONFLICT`.
+
 `tanggalWaktu` menggunakan ISO-8601 dan harus berisi waktu asli ketika kasir menekan simpan, bukan waktu sinkronisasi. Backend selalu mengambil nominal tarif/pembagian dari database dan menyimpan transaksi dalam UTC.
 
 ### GET `/api/mobile/transactions`
-Query: `page`, `limit`, `from`, `to`, `search`, `jenisKendaraanId`. `from`/`to` adalah tanggal WIB (`YYYY-MM-DD`). Kasir hanya melihat transaksi miliknya.
+Query: `page`, `limit`, `from`, `to`, `search`, `jenisKendaraanId`. `from`/`to` adalah tanggal WIB (`YYYY-MM-DD`). Kasir hanya melihat transaksi miliknya. Setiap transaksi menyertakan `petugas` (`{"id","nama"}`), atau `null` untuk transaksi lama yang belum memiliki petugas.
 
 ### GET `/api/mobile/transactions/check-plate?plate=D1234ABC`
 Pengecekan UX; validasi final tetap dilakukan pada POST transaksi.
 
 ### GET `/api/mobile/transactions/:id`
-Detail transaksi milik kasir yang sedang login.
+Detail transaksi milik kasir yang sedang login. Bentuk `petugas` sama dengan daftar transaksi.
 
 ## Error
 ```json
 {"success":false,"error":{"code":"INVALID_CREDENTIALS","message":"Username atau password salah"}}
 ```
 
-Kode utama: `UNAUTHORIZED`, `INVALID_TOKEN`, `INVALID_REFRESH_TOKEN`, `SESSION_TIMEOUT`, `ACCOUNT_DISABLED`, `ROLE_NOT_ALLOWED`, `INVALID_CREDENTIALS`, `INVALID_INPUT`, `INVALID_PLATE`, `VEHICLE_NOT_FOUND`, `DUPLICATE_PLATE`, `INVALID_CLIENT_TRANSACTION_ID`, `IDEMPOTENCY_CONFLICT`, `INVALID_TARIFF_CONFIG`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`, `INTERNAL_ERROR`.
+Kode utama: `UNAUTHORIZED`, `INVALID_TOKEN`, `INVALID_REFRESH_TOKEN`, `SESSION_TIMEOUT`, `ACCOUNT_DISABLED`, `ROLE_NOT_ALLOWED`, `INVALID_CREDENTIALS`, `INVALID_INPUT`, `INVALID_PLATE`, `VEHICLE_NOT_FOUND`, `WORKER_NOT_FOUND`, `WORKER_INACTIVE`, `DUPLICATE_PLATE`, `INVALID_CLIENT_TRANSACTION_ID`, `IDEMPOTENCY_CONFLICT`, `INVALID_TARIFF_CONFIG`, `NOT_FOUND`, `TOO_MANY_ATTEMPTS`, `INTERNAL_ERROR`.
 
 ## Security
 Jangan pernah memasukkan `DATABASE_URL`, password MySQL, `NEXTAUTH_SECRET`, atau `MOBILE_API_SECRET` ke APK. Android hanya membutuhkan URL API. Production wajib HTTPS.

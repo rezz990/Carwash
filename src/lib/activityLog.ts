@@ -67,6 +67,7 @@ export type ActivityEntityType =
   | "pengaturan"
   | "laporan"
   | "auth"
+  | "petugas"
 
 export type ActivityActor = {
   id: string | null
