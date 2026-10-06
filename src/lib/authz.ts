@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import pool from "@/lib/db"
@@ -12,7 +13,8 @@ export type CurrentUser = {
   aktif: boolean
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+// cache() dari React memoisasi per request; hasil tidak disimpan lintas request.
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await getServerSession(authOptions)
   const userId = session?.user?.id
   if (!userId || isSessionExpired(session)) return null
@@ -35,7 +37,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     role: rows[0].role,
     aktif: Boolean(rows[0].aktif),
   }
-}
+})
 
 export async function requireLogin() {
   const user = await getCurrentUser()
