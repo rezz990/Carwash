@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button"
 import { EmptyState, ErrorNotice, LoadingState } from "@/components/ui/Feedback"
 import { formatRupiah, formatWaktu, formatTanggalPanjang } from "@/lib/formatters"
 import type { TransaksiDetail, PaginatedDailyTransactions } from "../actions"
-import { PaginationControls } from "./PaginationControls"
+import { PaginationControls } from "@/components/ui/PaginationControls"
 
 export function DailyTransactionsModal({ tanggalKey, result, isPending, error, search, onRetry, onPageChange, onClose, onEdit, onDelete }: {
   tanggalKey: string; result: PaginatedDailyTransactions | null; isPending: boolean; error?: string; search?: string; onRetry: () => void

@@ -8,6 +8,15 @@ export type ChangelogEntry = {
 // Popup "Apa yang baru?" memakai entri pertama sebagai versi terbaru.
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.3.0",
+    tanggal: "6 Oktober 2026",
+    items: [
+      "Menu Petugas Cuci kini menampilkan statistik performa: total kendaraan ditangani, rincian mobil dan motor, capaian hari ini dan bulan ini, serta waktu terakhir bertugas setiap petugas.",
+      "Ringkasan baru di bagian atas halaman Petugas Cuci: jumlah petugas aktif dan nonaktif, plus total cucian hari ini per jenis kendaraan.",
+      "Buka detail petugas untuk melihat ringkasan lengkap (termasuk capaian minggu ini) dan riwayat transaksi yang ditangani dengan penomoran halaman.",
+    ],
+  },
+  {
     version: "1.2.0",
     tanggal: "5 Oktober 2026",
     items: [

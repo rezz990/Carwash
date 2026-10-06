@@ -13,7 +13,7 @@ import { formatRupiah, formatTanggalPanjang, startOfMonthWib, startOfWeekWib } f
 import { todayJakarta } from "@/lib/datetime"
 import { fetchRekap, fetchTransactionDateGroups, fetchTransactionsForDate, fetchJenisKendaraanAktif, deleteTransaksi, type RekapResult, type PaginatedTransactionGroups, type PaginatedDailyTransactions, type TransaksiDetail } from "./actions"
 import { SummaryCard } from "./components/SummaryCard"
-import { PaginationControls } from "./components/PaginationControls"
+import { PaginationControls } from "@/components/ui/PaginationControls"
 import { DailyTransactionsModal } from "./components/DailyTransactionsModal"
 import { EditTransaksiModal } from "./components/EditTransaksiModal"
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal"
