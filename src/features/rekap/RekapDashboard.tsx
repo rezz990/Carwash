@@ -11,13 +11,13 @@ import { useToast } from "@/components/toast/ToastProvider"
 import { useRealtimeRekap } from "@/hooks/useRealtimeRekap"
 import { formatRupiah, formatTanggalPanjang, startOfMonthWib, startOfWeekWib } from "@/lib/formatters"
 import { todayJakarta } from "@/lib/datetime"
-import { fetchRekap, fetchTransactionDateGroups, fetchTransactionsForDate, fetchJenisKendaraanAktif, deleteTransaksi, type RekapResult, type PaginatedTransactionGroups, type PaginatedDailyTransactions, type TransaksiDetail } from "./actions"
+import { fetchRekap, fetchTransactionDateGroups, fetchTransactionsForDate, fetchTransactionsForExport, fetchJenisKendaraanAktif, deleteTransaksi, type RekapResult, type PaginatedTransactionGroups, type PaginatedDailyTransactions, type TransaksiDetail } from "./actions"
 import { SummaryCard } from "./components/SummaryCard"
 import { PaginationControls } from "@/components/ui/PaginationControls"
 import { DailyTransactionsModal } from "./components/DailyTransactionsModal"
 import { EditTransaksiModal } from "./components/EditTransaksiModal"
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal"
-import { exportExcel, exportPdf } from "./exportUtils"
+import { exportExcel, exportPdf, exportDetailExcel, exportDetailPdf } from "./exportUtils"
 
 type Result<T> = { key: string; data?: T; error?: string }
 const PAGE_SIZE = 10
@@ -30,6 +30,7 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
   const [panel, setPanel] = useState<"filter" | "export" | null>(null)
   const [filterError, setFilterError] = useState("")
   const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null)
+  const [exportKind, setExportKind] = useState<"rekap" | "detail">("rekap")
   const [revision, setRevision] = useState(0)
   const [view, setView] = useState<"harian" | "detail">("harian")
   const [page, setPage] = useState(1)
@@ -111,11 +112,19 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
     if (!from || !to || from > to) { setFilterError("Pilih periode ekspor yang valid."); return }
     setExporting(format); setFilterError("")
     try {
-      const report = await fetchRekap({ dateFrom: from, dateTo: to })
-      if (report.error) { setFilterError(report.error); return }
-      if (!report.harian.length) { setFilterError("Belum ada transaksi untuk periode ekspor ini."); return }
-      if (format === "excel") await exportExcel({ harian: report.harian, dateFrom: from, dateTo: to })
-      else await exportPdf({ ...report, dateFrom: from, dateTo: to })
+      if (exportKind === "rekap") {
+        const report = await fetchRekap({ dateFrom: from, dateTo: to })
+        if (report.error) { setFilterError(report.error); return }
+        if (!report.harian.length) { setFilterError("Belum ada transaksi untuk periode ekspor ini."); return }
+        if (format === "excel") await exportExcel({ harian: report.harian, dateFrom: from, dateTo: to })
+        else await exportPdf({ ...report, dateFrom: from, dateTo: to })
+      } else {
+        const detail = await fetchTransactionsForExport({ dateFrom: from, dateTo: to })
+        if (detail.error) { setFilterError(detail.error); return }
+        if (!detail.data.length) { setFilterError("Belum ada transaksi untuk periode ekspor ini."); return }
+        if (format === "excel") await exportDetailExcel({ rows: detail.data, dateFrom: from, dateTo: to })
+        else await exportDetailPdf({ rows: detail.data, dateFrom: from, dateTo: to })
+      }
       addToast(`Laporan ${format.toUpperCase()} siap diunduh`, "success"); setPanel(null)
     } catch { setFilterError("Laporan gagal dibuat. Periksa koneksi dan coba lagi.") }
     finally { setExporting(null) }
@@ -131,7 +140,7 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
         <div className="min-w-0"><p className="text-xs font-medium text-slate-500">Periode aktif · WIB</p><p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-900"><CalendarDays size={17} className="shrink-0" />{rangeLabel}</p></div>
         <div className="flex w-full gap-2 sm:w-auto">
           <Button variant="outline" className="flex-1 gap-2 sm:flex-none" onClick={() => { setDraft(period); setFilterError(""); setPanel("filter") }}><SlidersHorizontal size={16} />Filter</Button>
-          <Button variant="outline" className="flex-1 gap-2 sm:flex-none" onClick={() => { setExportPeriod(period); setFilterError(""); setPanel("export") }}><Download size={16} />Ekspor</Button>
+          <Button variant="outline" className="flex-1 gap-2 sm:flex-none" onClick={() => { setExportPeriod(period); setExportKind("rekap"); setFilterError(""); setPanel("export") }}><Download size={16} />Ekspor</Button>
           <Button variant="ghost" size="icon" onClick={refresh} aria-label="Muat ulang rekap" disabled={!data && !summaryError}><RefreshCw size={17} /></Button>
         </div>
       </div>
@@ -184,7 +193,15 @@ export function RekapDashboard({ defaultDateFrom, defaultDateTo }: { defaultDate
       <form id="rekap-filter" onSubmit={event=>{event.preventDefault();apply(draft.from,draft.to)}} className="space-y-4"><DateRangeFields from={draft.from} to={draft.to} onFromChange={from=>setDraft(value=>({...value,from}))} onToChange={to=>setDraft(value=>({...value,to}))} />{filterError && <ErrorNotice message={filterError} />}</form>
     </Modal>}
     {panel === "export" && <Modal title="Ekspor laporan" description="Periode ekspor dapat diubah tanpa mengubah rekap." busy={!!exporting} onClose={()=>setPanel(null)} footer={<div className="grid grid-cols-2 gap-3"><Button variant="outline" onClick={()=>void download('excel')} disabled={!!exporting}>{exporting==='excel'?'Menyiapkan…':'Unduh Excel'}</Button><Button onClick={()=>void download('pdf')} disabled={!!exporting}>{exporting==='pdf'?'Menyiapkan…':'Unduh PDF'}</Button></div>}>
-      <div className="space-y-4"><DateRangeFields from={exportPeriod.from} to={exportPeriod.to} onFromChange={from=>setExportPeriod(value=>({...value,from}))} onToChange={to=>setExportPeriod(value=>({...value,to}))} /><p className="text-sm text-slate-500">Laporan mencakup seluruh transaksi dalam periode, termasuk halaman yang belum dibuka.</p>{filterError && <ErrorNotice message={filterError} />}</div>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2" aria-label="Jenis ekspor">{([['rekap', 'Rekap harian'], ['detail', 'Detail transaksi']] as const).map(([value, label]) =>
+          <button key={value} type="button" aria-pressed={exportKind === value} onClick={() => setExportKind(value)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 aria-pressed:border-yellow-400 aria-pressed:bg-yellow-400 aria-pressed:text-slate-900">{label}</button>)}</div>
+        <DateRangeFields from={exportPeriod.from} to={exportPeriod.to} onFromChange={from=>setExportPeriod(value=>({...value,from}))} onToChange={to=>setExportPeriod(value=>({...value,to}))} />
+        <p className="text-sm text-slate-500">{exportKind === "rekap"
+          ? "Laporan mencakup seluruh transaksi dalam periode, termasuk halaman yang belum dibuka."
+          : "Satu baris per transaksi lengkap dengan jam (WIB), mencakup seluruh transaksi dalam periode."}</p>
+        {filterError && <ErrorNotice message={filterError} />}
+      </div>
     </Modal>}
     {day && <DailyTransactionsModal tanggalKey={day} result={dailyResult ?? null} isPending={!dailyResult && !dailyError} error={dailyError} search={view==='detail'?searchValue:''} onRetry={refresh} onPageChange={setDayPage} onClose={()=>setDay(null)} onEdit={target=>{if(!vehicles.length){addToast('Daftar kendaraan belum tersedia. Muat ulang halaman lalu coba lagi.','error');return}setEditTarget(target)}} onDelete={setDeleteTarget} />}
     {editTarget && <EditTransaksiModal transaksi={editTarget} jenisKendaraanList={vehicles} onCancel={()=>setEditTarget(null)} onSaved={()=>{setEditTarget(null);refresh()}} onResult={addToast} />}

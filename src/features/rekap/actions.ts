@@ -80,7 +80,20 @@ export type PaginatedDailyTransactions = {
   error?: string;
 };
 
+export type ExportTransaksiRow = {
+  tanggal_waktu: string;
+  plat_nomor: string | null;
+  kategori: string;
+  ukuran: string;
+  kasir_nama: string | null;
+  petugas_nama: string | null;
+  tarif_total: number;
+  tarif_jatah_karyawan: number;
+  tarif_jatah_pemilik: number;
+};
+
 const DETAIL_PAGE_SIZE = 50;
+const EXPORT_MAX_ROWS = 20000;
 
 function getHariJakarta(dateString: string | Date): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -318,6 +331,55 @@ export async function fetchTransactionsForDate(params: {
   } catch (queryError) {
     console.error("Fetch daily transactions error:", queryError);
     return { ...empty, error: "Gagal memuat transaksi harian" };
+  }
+}
+
+export async function fetchTransactionsForExport(params: {
+  dateFrom: string;
+  dateTo: string;
+}): Promise<{ data: ExportTransaksiRow[]; error?: string }> {
+  const { error: authError } = await requireAdmin();
+  if (authError) return { data: [], error: authError };
+
+  const { dateFrom, dateTo } = params;
+  const startDate = jakartaDateToUtcSql(dateFrom);
+  const endDate = jakartaDateToUtcSql(dateTo, true);
+
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `
+      SELECT t.tanggal_waktu, t.plat_nomor, t.tarif_total,
+             t.tarif_jatah_karyawan, t.tarif_jatah_pemilik, jk.kategori, jk.ukuran,
+             u.username, u.nama_lengkap, p.nama AS petugas_nama
+      FROM transaksi t
+      LEFT JOIN jenis_kendaraan jk ON jk.id = t.jenis_kendaraan_id
+      LEFT JOIN users u ON u.id = t.kasir_id
+      LEFT JOIN petugas_cuci p ON p.id = t.petugas_id
+      WHERE t.tanggal_waktu >= ? AND t.tanggal_waktu <= ?
+      ORDER BY t.tanggal_waktu ASC
+      LIMIT ${EXPORT_MAX_ROWS + 1}
+    `,
+      [startDate, endDate],
+    );
+    if (rows.length > EXPORT_MAX_ROWS) {
+      return { data: [], error: "Periode terlalu panjang. Persempit rentang tanggal lalu coba lagi." };
+    }
+    return {
+      data: rows.map((row) => ({
+        tanggal_waktu: utcSqlToIso(row.tanggal_waktu),
+        plat_nomor: row.plat_nomor ?? null,
+        kategori: row.kategori || "-",
+        ukuran: row.ukuran || "-",
+        kasir_nama: row.nama_lengkap || row.username || null,
+        petugas_nama: row.petugas_nama || null,
+        tarif_total: Number(row.tarif_total),
+        tarif_jatah_karyawan: Number(row.tarif_jatah_karyawan),
+        tarif_jatah_pemilik: Number(row.tarif_jatah_pemilik),
+      })),
+    };
+  } catch (error) {
+    console.error("Fetch transactions export error:", error);
+    return { data: [], error: "Gagal memuat detail transaksi" };
   }
 }
 

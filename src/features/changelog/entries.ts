@@ -8,6 +8,13 @@ export type ChangelogEntry = {
 // Popup "Apa yang baru?" memakai entri pertama sebagai versi terbaru.
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
   {
+    version: "1.4.0",
+    tanggal: "8 Oktober 2026",
+    items: [
+      "Ekspor laporan kini punya pilihan Rekap harian atau Detail transaksi (lengkap dengan jam) untuk Excel dan PDF.",
+    ],
+  },
+  {
     version: "1.3.0",
     tanggal: "6 Oktober 2026",
     items: [
